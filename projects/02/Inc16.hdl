@@ -13,6 +13,9 @@ CHIP Inc16 {
     OUT out[16];
 
     PARTS:
+    Add16(a[0]=true,a[1..15]=false, b=in, out=out);
+
+    /*
     Nand(a=in[0], b=in[0], out=n0);
     And(a=in[0], b=in[0], out=a0);
     Nand(a=n0, b=a0, out=high);
@@ -33,4 +36,5 @@ CHIP Inc16 {
     HalfAdder(a=in[13], b=carry12, sum=out[13], carry=carry13);
     HalfAdder(a=in[14], b=carry13, sum=out[14], carry=carry14);
     HalfAdder(a=in[15], b=carry14, sum=out[15], carry=carry15);
+*/
 }
