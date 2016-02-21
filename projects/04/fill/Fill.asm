@@ -8,91 +8,93 @@
 // i.e. writes "black" in every pixel. When no key is pressed, the
 // program clears the screen, i.e. writes "white" in every pixel.
 
-// @0 : R0 screen position
-// @1 : R1 row
-// @2 : R2 column
-// @3 : R3 color
+// @POS      current screen position
+// @ROW      current row
+// @COL      current column
+// @COLOR    current color (black or white)
+// @NUMROWS  total screen rows
+// @NUMCOLS  total screen columns
 
 @256
 D=A
-@ROWS
+@NUMROWS
 M=D
 
 @32
 D=A
-@COLS
+@NUMCOLS
 M=D
 
 (KBLOOP)
-  @KBD  // keyboard
+  @KBD   // keyboard
   D=M
 
   @BLACK
-  D;JGT   // key pressed?
+  D;JGT  // key pressed?
   
   (WHITE)
-  @0   // zero: white
+  @0      // zero: white
   D=A
-  @R3   // color: white
+  @COLOR  // color: white
   M=D
-  @COLOREND
+  @PICKEREND
   0;JMP
 
   (BLACK)
-  @0   // zero: black
+  @0      // zero: black
   D=A-1
-  @R3  // color: black
+  @COLOR  // color: black
   M=D
-  (COLOREND)
+  (PICKEREND)
 
   (FILL)
   @SCREEN  // first screen address
   D=A
-  @R0      // reset screen position
+  @POS      // reset screen position
   M=D
 
 
   @0       // zero
   D=A
-  @R1      // current row
+  @ROW     // current row
   M=D
   (FILLLOOP)
-    @R1
+    @ROW
     D=M
-    @ROWS
+    @NUMROWS
     D=D-M 
     @FILLLOOPEND
     D;JGE  // jump if row >= 256
 
     @0     // zero
     D=A
-    @R2    // reset column
+    @COL    // reset column
     M=D
     (ROWLOOP)
-      @R2  // current column
+      @COL  // current column
       D=M
-      @COLS
+      @NUMCOLS
       D=D-M
       @ROWLOOPEND
       D;JGE  // jump if column >= 32
 
-      @R3
+      @COLOR
       D=M
-      @R0
+      @POS
       A=M
       M=D    // set color
 
-      @R2    // increment column
+      @COL    // increment column
       M=M+1
 
-      @R0    // increment screen position
+      @POS    // increment screen position
       M=M+1
       
       @ROWLOOP
       0;JMP  // increment column and loop
     (ROWLOOPEND)
     
-    @R1    // increment row
+    @ROW    // increment row
     M=M+1
 
     @FILLLOOP
