@@ -39,5 +39,41 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+
+    // inst[5] == write ALU out to A
+    Mux16(a[0..14]=instruction[0..14], b=aluo, sel=instruction[15], out=toareg);
+    Not(in=instruction[15], out=ninst15);
+    And(a=instruction[5], b=instruction[15], out=loadaddresscmd);
+    Or(a=ninst15, b=loadaddresscmd, out=loadareg);
+    ARegister(in=toareg, load=loadareg, out=areg, out[0..14]=addressM[0..14]);
+
+    // inst[4] == write ALU out to D
+    And(a=instruction[4], b=instruction[15], out=loaddatacmd);
+    DRegister(in=aluo, load=loaddatacmd, out=dreg);
+
+    // writeM
+    And(a=instruction[3], b=instruction[15], out=writeM);
+    
+    Mux16(a=areg, b=inM, sel=instruction[12], out=y);
+    ALU(x=dreg, y=y, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=aluo, out=outM, zr=zr, ng=ng);
+
+    // j:inst[1] => out=0
+    And(a=instruction[1], b=zr, out=eq0);
+    // j:inst[2] => out<0
+    And(a=instruction[2], b=ng, out=lt0);
+    // j:inst[0] => out>0
+    Not(in=zr, out=nzr);
+    Not(in=ng, out=nng);
+    And(a=nzr, b=nng, out=pos);
+    And(a=instruction[0], b=pos, out=gt0);
+    // JMP
+    And(a=instruction[0], b=instruction[1], out=jmpa);
+    And(a=jmpa, b=instruction[2], out=jmp);
+    // is jump?
+    Or(a=eq0, b=lt0, out=jmp0);
+    Or(a=jmp0, b=gt0, out=jmp1);
+    Or(a=jmp1, b=jmp, out=jmp2);
+    And(a=jmp2, b=instruction[15], out=jump);
+    Not(in=jump, out=inc);
+    PC(in=areg, load=jump, inc=inc, reset=reset, out[0..14]=pc);
 }
