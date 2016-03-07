@@ -11,9 +11,6 @@
     ((tuple 'ok device)
      device)))
 
-(defun is_a_command (line)
-  (== "@" (lists:sublist line 1)))
-
 (defun flatten_decimal_num (d_num)
   (++ "0"
       (lists:flatten
