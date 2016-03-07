@@ -1,12 +1,13 @@
 (defmodule assembler
-  (export (file_device 1)
+  (export (read_file_device 1)
           (read_line 1)
           (process_line 1)
           (process_a_command 1)
           (flatten_decimal_num 1)
-          (read_all_lines 1)))
+          (read_all_lines 2)
+          (assemble 2)))
 
-(defun file_device (file)
+(defun read_file_device (file)
   (case (file:open file '(read))
     ((tuple 'ok device)
      device)))
@@ -77,7 +78,7 @@
         (j "000")
         (c (lookup-comp comp))
         (d (lookup-dest dest)))
-    (++ j c d)))
+    (++ prefix j c d)))
 
 (defun process_c_command (c_cmd)
   (let ((parts (string:tokens c_cmd "=;"))
@@ -127,11 +128,21 @@
 (defun chop_last_char (line)
   (string:sub_string line 1 (- (string:len line) 1)))
 
-(defun read_all_lines (file_device)
-  (case (read_line file_device)
-    ('eof "")
-    ('skip (read_all_lines file_device))
-    (line (++ line "~n" (read_all_lines file_device)))))
+(defun write_line (file line)
+  (file:write_file file
+                   (io_lib:fwrite "~s~n" (list line))
+                   (list 'append)))
 
-;; (defun assemble [file]
-;;   (file_device file))
+(defun read_all_lines (read_device write_file_name)
+  (case (read_line read_device)
+    ('eof "")
+    ('skip (read_all_lines read_device write_file_name))
+    (line (begin
+            (write_line write_file_name line)
+            (read_all_lines read_device write_file_name))
+          ;; (++ line "~n" (read_all_lines file_device))
+          )))
+
+(defun assemble (read_file_name write_file_name)
+  (let ((read_dev (read_file_device read_file_name)))
+    (read_all_lines read_dev write_file_name)))
