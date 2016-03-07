@@ -78,7 +78,7 @@
         (j "000")
         (c (lookup-comp comp))
         (d (lookup-dest dest)))
-    (++ prefix j c d)))
+    (++ prefix c d j)))
 
 (defun process_c_command (c_cmd)
   (let ((parts (string:tokens c_cmd "=;"))
