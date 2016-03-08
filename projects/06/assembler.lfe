@@ -32,7 +32,7 @@
       (let (((tuple i _) (string:to_integer suffix)))
         (flatten_decimal_num i)))))
 
-(defun lookup-comp (comp)
+(defun lookup_comp (comp)
   (mref (map
          "0"   "0101010"
          "1"   "0111111"
@@ -63,7 +63,7 @@
          "D&M" "1000000"
          "D|M" "1010101") comp))
 
-(defun lookup-dest (dest)
+(defun lookup_dest (dest)
   (mref (map
          "M"   "001"
          "D"   "010"
@@ -73,11 +73,28 @@
          "AD"  "110"
          "AMD" "111") dest))
 
+(defun lookup_jump (jump)
+  (mref (map
+         "JGT" "001"
+         "JEQ" "010"
+         "JGE" "011"
+         "JLT" "100"
+         "JNE" "101"
+         "JLE" "110"
+         "JMP" "111") jump))
+
 (defun translate_dest_comp (dest comp)
   (let ((prefix "111")
-        (j "000")
-        (c (lookup-comp comp))
-        (d (lookup-dest dest)))
+        (c (lookup_comp comp))
+        (d (lookup_dest dest))
+        (j "000"))
+    (++ prefix c d j)))
+
+(defun translate_comp_jump (comp jump)
+  (let ((prefix "111")
+        (c (lookup_comp comp))
+        (d "000")
+        (j (lookup_jump jump)))
     (++ prefix c d j)))
 
 (defun process_c_command (c_cmd)
@@ -85,13 +102,10 @@
         (contains_eq (< 0 (string:rstr c_cmd "=")))
         (contains_semicolon (< 0 (string:rstr c_cmd ";"))))
     (cond
-     ((?= (list dest comp jump) parts)
-      "three parts")
      ((?= (list dest comp) (when contains_eq) parts)
       (translate_dest_comp dest comp))
      ((?= (list comp jump) (when contains_semicolon) parts)
-      "two parts with ;")
-     ('true "bad c command parsing"))))
+      (translate_comp_jump comp jump)))))
 
 (defun process_line
   ;; blank lines / newlines only
