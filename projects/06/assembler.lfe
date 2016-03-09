@@ -1,10 +1,6 @@
 (defmodule assembler
-  (export (read_file_device 1)
-          (read_line 1)
-          (process_line 1)
-          (process_a_command 1)
-          (flatten_decimal_num 1)
-          (read_all_lines 2)
+  (export (unwrap_label 1)
+          (strip_comments 1)
           (assemble 2)))
 
 (defun read_file_device (file)
@@ -20,10 +16,10 @@
 (defun is_symbol (symbol_or_dec)
   'false)
 
-(defun strip_trailing_whitespace (line)
+(defun strip_surrounding_whitespace (line)
   (binary:bin_to_list
    (binary:list_to_bin
-    (re:replace line "\\s+$" "" (list 'global)))))
+    (re:replace (string:strip line) "\\s+$" "" (list 'global)))))
 
 (defun process_a_command (a_cmd)
   (let ((suffix (lists:sublist a_cmd 2 (- (string:len a_cmd) 1))))
@@ -123,21 +119,31 @@
   ;; 64 is unicode for "@"
   ;; I'm checking for "AT commands"
   ((line) (when (== 64 (hd line)))
-   (process_a_command line))
+   (tuple 'a_cmd (process_a_command line)))
 
   ;; Labels
   ;; 40 is a "(" which is used by labels
   ((line) (when (== 40 (hd line)))
-   line)
+   (tuple 'label line))
   
   ;; C commands
-  ((line) (process_c_command line)))
+  ((line)
+   (tuple 'c_cmd (process_c_command line))))
+
+(defun strip_comments (line)
+  (let (((cons head tail) (re:split line "//")))
+    (cond
+     ((< 0 (length tail))
+      (binary:bin_to_list head))
+     ('true line))))
 
 (defun read_line (file_device)
   (case (io:get_line file_device "")
     ('eof 'eof)
-    (line (process_line
-           (strip_trailing_whitespace line)))))
+    (line (let ((stripped (strip_surrounding_whitespace
+                           (strip_comments line))))
+            (io:format "line: ~p~n" (list stripped))
+            (process_line stripped)))))
 
 (defun chop_last_char (line)
   (string:sub_string line 1 (- (string:len line) 1)))
@@ -151,12 +157,35 @@
   (case (read_line read_device)
     ('eof "")
     ('skip (read_all_lines read_device write_file_name))
-    (line (begin
-            (write_line write_file_name line)
-            (read_all_lines read_device write_file_name))
-          ;; (++ line "~n" (read_all_lines file_device))
-          )))
+    ((tuple _ line)
+     (begin
+       (write_line write_file_name line)
+       (read_all_lines read_device write_file_name)))))
+
+(defun unwrap_label (line)
+  (lists:sublist line 2 (- (string:len line) 2)))
+
+(defun parse_cmd_or_label
+  ((line_type _ rom_address symbol_table) (when (or (== line_type 'a_cmd)
+                                                    (== line_type 'c_cmd)))
+   (list (+ 1 rom_address) symbol_table))
+  (('label line rom_address symbol_table)
+   (let ((lab (unwrap_label line)))
+     (list rom_address (mset symbol_table lab (+ 1 rom_address))))))
+
+(defun symbol_pass (read_device)
+   (symbol_pass read_device 0 (map)))
+
+(defun symbol_pass (read_device rom_address symbol_table)
+   (case (read_line read_device)
+     ('eof symbol_table)
+     ('skip (symbol_pass read_device rom_address symbol_table))
+     ((tuple line_type line)
+      (let (((list rom sym) (parse_cmd_or_label line_type line rom_address symbol_table)))
+        (symbol_pass read_device rom sym)))))
 
 (defun assemble (read_file_name write_file_name)
-  (let ((read_dev (read_file_device read_file_name)))
+  (let ((symbol_table (symbol_pass (read_file_device read_file_name)))
+        (read_dev (read_file_device read_file_name)))
+    (io:format "~p~n" (list symbol_table))
     (read_all_lines read_dev write_file_name)))
