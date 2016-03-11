@@ -253,8 +253,12 @@
 (defun assemble (read_file_name write_file_name)
   (let ((first_file_dev (read_file_device read_file_name)))
     (let ((symbol_table (try
-                          (symbol_pass first_file_dev)
+                            (symbol_pass first_file_dev)
                           (after
                               (file:close first_file_dev))))
-        (read_dev (read_file_device read_file_name)))
-    (read_all_lines read_dev write_file_name symbol_table 16))))
+          (read_dev (read_file_device read_file_name)))
+      (try
+          (read_all_lines read_dev write_file_name symbol_table 16)
+        (after
+            (file:close read_dev))))))
+    
