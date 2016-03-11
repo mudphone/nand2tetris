@@ -48,16 +48,23 @@
 (defun lookup_register (r)
   (mref (registers) r))
 
-(defun process_a_command (a_cmd symbol_table)
+(defun is_string_all_digits (str)
+  (== 0 (length (binary:bin_to_list (binary:list_to_bin (re:split str "[0123456789]"))))))
+
+(defun process_a_command (a_cmd symbol_table next_ram_address)
   (let ((suffix (lists:sublist a_cmd 2 (- (string:len a_cmd) 1))))
     (io:format "lookup a cmd key (suffix): ~p~n" (list suffix))
     (cond
      ((maps:is_key suffix (registers))
-      (lookup_register suffix))
+      (tuple 'a_cmd (lookup_register suffix) symbol_table next_ram_address))
      ((maps:is_key suffix symbol_table)
-      (mref symbol_table suffix))
+      (tuple 'a_cmd (mref symbol_table suffix) symbol_table next_ram_address))
+     ((not (is_string_all_digits suffix))
+      (process_a_command a_cmd
+                         (mset symbol_table suffix (int_to_padded_binary next_ram_address))
+                         (+ 1 next_ram_address)))
      ((?= (tuple i _) (string:to_integer suffix))
-      (int_to_padded_binary i)))))
+      (tuple 'a_cmd (int_to_padded_binary i) symbol_table next_ram_address)))))
 
 (defun comp_fields ()
   (map
@@ -179,15 +186,18 @@
   ((line)
    (tuple 'c_cmd line)))
 
-(defun process_line (line symbol_table)
+(defun process_line (line symbol_table next_ram_address)
   (let ((meta_line (categorize_line line)))
     (io:format "meta_line: ~p~n" (list meta_line))
     (case meta_line
       ('eof 'eof)
       ('skip 'skip)
-      ((tuple 'a_cmd ln) (process_a_command ln symbol_table))
-      ((tuple 'label _)  'skip)
-      ((tuple 'c_cmd ln) (process_c_command ln)))))
+      ((tuple 'a_cmd ln)
+       (process_a_command ln symbol_table next_ram_address))
+      ((tuple 'label _)
+       'skip)
+      ((tuple 'c_cmd ln)
+       (process_c_command ln)))))
 
 (defun strip_comments (line)
   (let (((cons head tail) (re:split line "//")))
@@ -208,23 +218,26 @@
   (string:sub_string line 1 (- (string:len line) 1)))
 
 (defun write_line (file line)
-  (io:format "writing")
   (file:write_file file
                    (io_lib:fwrite "~s~n" (list line))
                    (list 'append)))
 
-(defun read_all_lines (read_device write_file_name symbol_table)
+(defun read_all_lines (read_device write_file_name symbol_table next_ram_address)
   (let ((processed (process_line (prepare_line read_device)
-                                 symbol_table)))
+                                 symbol_table
+                                 next_ram_address)))
     (io:format "processed: ~p~n" (list processed))
     (case processed 
       ('eof 'done)
-      ('skip (read_all_lines read_device write_file_name symbol_table))
+      ('skip (read_all_lines read_device write_file_name symbol_table next_ram_address))
+      ((tuple 'a_cmd line sym_tbl nxt_ram_adr)
+       (begin
+         (write_line write_file_name line)
+         (read_all_lines read_device write_file_name sym_tbl nxt_ram_adr)))
       (line
        (begin
          (write_line write_file_name line)
-         (read_all_lines read_device write_file_name symbol_table)))))
-  )
+         (read_all_lines read_device write_file_name symbol_table next_ram_address))))))
 
 (defun unwrap_label (line)
   (lists:sublist line 2 (- (string:len line) 2)))
@@ -253,5 +266,5 @@
                               (file:close first_file_dev))))
         (read_dev (read_file_device read_file_name)))
     (io:format "symbol table: ~p~n" (list symbol_table))
-    (read_all_lines read_dev write_file_name symbol_table)))
+    (read_all_lines read_dev write_file_name symbol_table 16)))
   )
