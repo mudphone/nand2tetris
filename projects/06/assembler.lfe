@@ -53,7 +53,6 @@
 
 (defun process_a_command (a_cmd symbol_table next_ram_address)
   (let ((suffix (lists:sublist a_cmd 2 (- (string:len a_cmd) 1))))
-    (io:format "lookup a cmd key (suffix): ~p~n" (list suffix))
     (cond
      ((maps:is_key suffix (registers))
       (tuple 'a_cmd (lookup_register suffix) symbol_table next_ram_address))
@@ -188,7 +187,6 @@
 
 (defun process_line (line symbol_table next_ram_address)
   (let ((meta_line (categorize_line line)))
-    (io:format "meta_line: ~p~n" (list meta_line))
     (case meta_line
       ('eof 'eof)
       ('skip 'skip)
@@ -211,7 +209,6 @@
     ('eof 'eof)
     (line (let ((stripped (strip_surrounding_whitespace
                            (strip_comments line))))
-            (io:format "line: ~p~n" (list stripped))
             stripped))))
 
 (defun chop_last_char (line)
@@ -226,7 +223,6 @@
   (let ((processed (process_line (prepare_line read_device)
                                  symbol_table
                                  next_ram_address)))
-    (io:format "processed: ~p~n" (list processed))
     (case processed 
       ('eof 'done)
       ('skip (read_all_lines read_device write_file_name symbol_table next_ram_address))
@@ -243,7 +239,6 @@
   (lists:sublist line 2 (- (string:len line) 2)))
 
 (defun parse_label (line rom_address symbol_table)
-  (io:format "2 symbol table: ~p~n" (list symbol_table))
   (mset symbol_table (unwrap_label line)
         (int_to_padded_binary rom_address)))
 
@@ -265,6 +260,4 @@
                           (after
                               (file:close first_file_dev))))
         (read_dev (read_file_device read_file_name)))
-    (io:format "symbol table: ~p~n" (list symbol_table))
-    (read_all_lines read_dev write_file_name symbol_table 16)))
-  )
+    (read_all_lines read_dev write_file_name symbol_table 16))))
