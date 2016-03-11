@@ -1,6 +1,7 @@
 (defmodule assembler
   (export (unwrap_label 1)
           (strip_comments 1)
+          (strip_surrounding_whitespace 1)
           (assemble 2)))
 
 (defun read_file_device (file)
@@ -13,71 +14,110 @@
       (lists:flatten
        (io_lib:format "~15.2.0B" (list d_num)))))
 
-(defun is_symbol (symbol_or_dec)
-  'false)
-
 (defun strip_surrounding_whitespace (line)
   (binary:bin_to_list
    (binary:list_to_bin
     (re:replace (string:strip line) "\\s+$" "" (list 'global)))))
 
-(defun process_a_command (a_cmd)
+(defun registers ()
+  (map
+   "SP"     (int_to_padded_binary 0)
+   "LCL"    (int_to_padded_binary 1)
+   "ARG"    (int_to_padded_binary 2)
+   "THIS"   (int_to_padded_binary 3) 
+   "THAT"   (int_to_padded_binary 4)
+   "R0"     (int_to_padded_binary 0)
+   "R1"     (int_to_padded_binary 1)
+   "R2"     (int_to_padded_binary 2)
+   "R3"     (int_to_padded_binary 3)
+   "R4"     (int_to_padded_binary 4)
+   "R5"     (int_to_padded_binary 5)
+   "R6"     (int_to_padded_binary 6)
+   "R7"     (int_to_padded_binary 7)
+   "R8"     (int_to_padded_binary 8)
+   "R9"     (int_to_padded_binary 9)
+   "R10"    (int_to_padded_binary 10)
+   "R11"    (int_to_padded_binary 11)
+   "R12"    (int_to_padded_binary 12)
+   "R13"    (int_to_padded_binary 13)
+   "R14"    (int_to_padded_binary 14)
+   "R15"    (int_to_padded_binary 15)
+   "SCREEN" (int_to_padded_binary 16384)
+   "KBD"    (int_to_padded_binary 24576)))
+
+(defun lookup_register (r)
+  (mref (registers) r))
+
+(defun process_a_command (a_cmd symbol_table)
   (let ((suffix (lists:sublist a_cmd 2 (- (string:len a_cmd) 1))))
-    (if (is_symbol suffix)
-      "not processing symbols yet"
-      (let (((tuple i _) (string:to_integer suffix)))
-        (int_to_padded_binary i)))))
+    (io:format "lookup a cmd key (suffix): ~p~n" (list suffix))
+    (cond
+     ((maps:is_key suffix (registers))
+      (lookup_register suffix))
+     ((maps:is_key suffix symbol_table)
+      (mref symbol_table suffix))
+     ((?= (tuple i _) (string:to_integer suffix))
+      (int_to_padded_binary i)))))
+
+(defun comp_fields ()
+  (map
+   "0"   "0101010"
+   "1"   "0111111"
+   "-1"  "0111010"
+   "D"   "0001100"
+   "A"   "0110000"
+   "!D"  "0001101"
+   "!A"  "0110001"
+   "-D"  "0001111"
+   "-A"  "0110011"
+   "D+1" "0011111"
+   "A+1" "0110111"
+   "D-1" "0001110"
+   "A-1" "0110010"
+   "D+A" "0000010"
+   "D-A" "0010011"
+   "A-D" "0000111"
+   "D&A" "0000000"
+   "D|A" "0010101"
+   "M"   "1110000"
+   "!M"  "1110001"
+   "-M"  "1110011"
+   "M+1" "1110111"
+   "M-1" "1110010"
+   "D+M" "1000010"
+   "D-M" "1010011"
+   "M-D" "1000111"
+   "D&M" "1000000"
+   "D|M" "1010101"))
 
 (defun lookup_comp (comp)
-  (mref (map
-         "0"   "0101010"
-         "1"   "0111111"
-         "-1"  "0111010"
-         "D"   "0001100"
-         "A"   "0110000"
-         "!D"  "0001101"
-         "!A"  "0110001"
-         "-D"  "0001111"
-         "-A"  "0110011"
-         "D+1" "0011111"
-         "A+1" "0110111"
-         "D-1" "0001110"
-         "A-1" "0110010"
-         "D+A" "0000010"
-         "D-A" "0010011"
-         "A-D" "0000111"
-         "D&A" "0000000"
-         "D|A" "0010101"
-         "M"   "1110000"
-         "!M"  "1110001"
-         "-M"  "1110011"
-         "M+1" "1110111"
-         "M-1" "1110010"
-         "D+M" "1000010"
-         "D-M" "1010011"
-         "M-D" "1000111"
-         "D&M" "1000000"
-         "D|M" "1010101") comp))
+  (mref (comp_fields) comp))
+
+(defun dest_fields ()
+  (map
+   "M"   "001"
+   "D"   "010"
+   "MD"  "011"
+   "A"   "100"
+   "AM"  "101"
+   "AD"  "110"
+   "AMD" "111"))
 
 (defun lookup_dest (dest)
-  (mref (map
-         "M"   "001"
-         "D"   "010"
-         "MD"  "011"
-         "A"   "100"
-         "AM"  "101"
-         "AD"  "110"
-         "AMD" "111") dest))
+  (mref (dest_fields) dest))
+
+(defun jump_fields ()
+  (map
+   "JGT" "001"
+   "JEQ" "010"
+   "JGE" "011"
+   "JLT" "100"
+   "JNE" "101"
+   "JLE" "110"
+   "JMP" "111"))
 
 (defun lookup_jump (jump)
-  (mref (map
-         "JGT" "001"
-         "JEQ" "010"
-         "JGE" "011"
-         "JLT" "100"
-         "JNE" "101"
-         "JLE" "110"
-         "JMP" "111") jump))
+  (mref (jump_fields) jump))
 
 (defun translate_dest_comp (dest comp)
   (let ((prefix "111")
@@ -103,11 +143,20 @@
      ((?= (list comp jump) (when contains_semicolon) parts)
       (translate_comp_jump comp jump)))))
 
-(defun process_line
+(defun categorize_line
+  (('eof) 'eof)
+  
   ;; blank lines / newlines only
   ((line) (when (== 0 (length line)))
    'skip)
 
+  ;; newline characters
+  ;; 10 is unicode for "\n"
+  ;; skip lines with only a newline character
+  (((cons f r)) (when (and (== 10 f)
+                           (== 0 (length r))))
+   'skip)
+  
   ;; comment lines
   ;; 47 is unicode for "/"
   ;; I'm checking for comment lines starting with "//"
@@ -119,7 +168,7 @@
   ;; 64 is unicode for "@"
   ;; I'm checking for "AT commands"
   ((line) (when (== 64 (hd line)))
-   (tuple 'a_cmd (process_a_command line)))
+   (tuple 'a_cmd line))
 
   ;; Labels
   ;; 40 is a "(" which is used by labels
@@ -128,7 +177,17 @@
   
   ;; C commands
   ((line)
-   (tuple 'c_cmd (process_c_command line))))
+   (tuple 'c_cmd line)))
+
+(defun process_line (line symbol_table)
+  (let ((meta_line (categorize_line line)))
+    (io:format "meta_line: ~p~n" (list meta_line))
+    (case meta_line
+      ('eof 'eof)
+      ('skip 'skip)
+      ((tuple 'a_cmd ln) (process_a_command ln symbol_table))
+      ((tuple 'label _)  'skip)
+      ((tuple 'c_cmd ln) (process_c_command ln)))))
 
 (defun strip_comments (line)
   (let (((cons head tail) (re:split line "//")))
@@ -137,55 +196,62 @@
       (binary:bin_to_list head))
      ('true line))))
 
-(defun read_line (file_device)
+(defun prepare_line (file_device)
   (case (io:get_line file_device "")
     ('eof 'eof)
     (line (let ((stripped (strip_surrounding_whitespace
                            (strip_comments line))))
             (io:format "line: ~p~n" (list stripped))
-            (process_line stripped)))))
+            stripped))))
 
 (defun chop_last_char (line)
   (string:sub_string line 1 (- (string:len line) 1)))
 
 (defun write_line (file line)
+  (io:format "writing")
   (file:write_file file
                    (io_lib:fwrite "~s~n" (list line))
                    (list 'append)))
 
-(defun read_all_lines (read_device write_file_name)
-  (case (read_line read_device)
-    ('eof "")
-    ('skip (read_all_lines read_device write_file_name))
-    ((tuple _ line)
-     (begin
-       (write_line write_file_name line)
-       (read_all_lines read_device write_file_name)))))
+(defun read_all_lines (read_device write_file_name symbol_table)
+  (let ((processed (process_line (prepare_line read_device)
+                                 symbol_table)))
+    (io:format "processed: ~p~n" (list processed))
+    (case processed 
+      ('eof 'done)
+      ('skip (read_all_lines read_device write_file_name symbol_table))
+      (line
+       (begin
+         (write_line write_file_name line)
+         (read_all_lines read_device write_file_name symbol_table)))))
+  )
 
 (defun unwrap_label (line)
   (lists:sublist line 2 (- (string:len line) 2)))
 
-(defun parse_cmd_or_label
-  ((line_type _ rom_address symbol_table) (when (or (== line_type 'a_cmd)
-                                                    (== line_type 'c_cmd)))
-   (list (+ 1 rom_address) symbol_table))
-  (('label line rom_address symbol_table)
-   (let ((lab (unwrap_label line)))
-     (list rom_address (mset symbol_table lab (+ 1 rom_address))))))
+(defun parse_label (line rom_address symbol_table)
+  (io:format "2 symbol table: ~p~n" (list symbol_table))
+  (mset symbol_table (unwrap_label line)
+        (int_to_padded_binary rom_address)))
 
 (defun symbol_pass (read_device)
    (symbol_pass read_device 0 (map)))
 
 (defun symbol_pass (read_device rom_address symbol_table)
-   (case (read_line read_device)
-     ('eof symbol_table)
-     ('skip (symbol_pass read_device rom_address symbol_table))
-     ((tuple line_type line)
-      (let (((list rom sym) (parse_cmd_or_label line_type line rom_address symbol_table)))
-        (symbol_pass read_device rom sym)))))
+  (case (categorize_line (prepare_line read_device))
+    ('eof symbol_table)
+    ('skip            (symbol_pass read_device rom_address symbol_table))
+    ((tuple 'a_cmd _) (symbol_pass read_device (+ 1 rom_address) symbol_table))
+    ((tuple 'c_cmd _) (symbol_pass read_device (+ 1 rom_address) symbol_table))
+    ((tuple 'label line) (symbol_pass read_device rom_address (parse_label line rom_address symbol_table)))))
 
 (defun assemble (read_file_name write_file_name)
-  (let ((symbol_table (symbol_pass (read_file_device read_file_name)))
+  (let ((first_file_dev (read_file_device read_file_name)))
+    (let ((symbol_table (try
+                          (symbol_pass first_file_dev)
+                          (after
+                              (file:close first_file_dev))))
         (read_dev (read_file_device read_file_name)))
-    (io:format "~p~n" (list symbol_table))
-    (read_all_lines read_dev write_file_name)))
+    (io:format "symbol table: ~p~n" (list symbol_table))
+    (read_all_lines read_dev write_file_name symbol_table)))
+  )
