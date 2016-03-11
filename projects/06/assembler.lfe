@@ -8,7 +8,7 @@
     ((tuple 'ok device)
      device)))
 
-(defun flatten_decimal_num (d_num)
+(defun int_to_padded_binary (d_num)
   (++ "0"
       (lists:flatten
        (io_lib:format "~15.2.0B" (list d_num)))))
@@ -26,7 +26,7 @@
     (if (is_symbol suffix)
       "not processing symbols yet"
       (let (((tuple i _) (string:to_integer suffix)))
-        (flatten_decimal_num i)))))
+        (int_to_padded_binary i)))))
 
 (defun lookup_comp (comp)
   (mref (map
