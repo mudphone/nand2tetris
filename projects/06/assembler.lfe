@@ -1,8 +1,5 @@
 (defmodule assembler
-  (export (unwrap_label 1)
-          (strip_comments 1)
-          (strip_surrounding_whitespace 1)
-          (assemble 2)))
+  (export (assemble 2)))
 
 (defun read_file_device (file)
   (case (file:open file '(read))
