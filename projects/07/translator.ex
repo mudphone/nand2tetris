@@ -203,8 +203,86 @@ defmodule Translator do
      increment_stack_pointer() # increment stack pointer
     ]
   end
-  def translate_command([cmd, _]), do: "unknown cmd: #{cmd}"      
+  def translate_command([:C_PUSH, ["temp", arg2]]) do
+    ["@R5",
+     "D=A",
+     "@#{arg2}",
+     "A=D+A",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
+  def translate_command([:C_PUSH, ["local", arg2]]) do
+    translate_push_command("LCL", arg2)
+  end
+  def translate_command([:C_PUSH, ["argument", arg2]]) do
+    translate_push_command("ARG", arg2)
+  end
+  def translate_command([:C_PUSH, ["this", arg2]]) do
+    translate_push_command("THIS", arg2)
+  end
+  def translate_command([:C_PUSH, ["that", arg2]]) do
+    translate_push_command("THAT", arg2)
+  end
+  def translate_command([:C_POP, ["local", arg2]]) do
+    translate_pop_command("LCL", arg2)
+  end
+  def translate_command([:C_POP, ["argument", arg2]]) do
+    translate_pop_command("ARG", arg2)
+  end
+  def translate_command([:C_POP, ["this", arg2]]) do
+    translate_pop_command("THIS", arg2)
+  end
+  def translate_command([:C_POP, ["that", arg2]]) do
+    translate_pop_command("THAT", arg2)
+  end
+  def translate_command([:C_POP, ["temp", arg2]]) do
+    ["@R5",      # get temp base address
+     "D=A",
+     "@#{arg2}",
+     "D=D+A",    # get temp + i address
+     "@R13",     # stick in R13
+     "M=D",
+     get_top_item_on_stack(), # pop off stack
+     "D=M",
+     "@R13", # stick in local address
+     "A=M",
+     "M=D"]
+  end
+  def translate_command([cmd, args]) do
+    s = "unknown cmd: #{cmd} - with args: #{List.first(args)}"
+    if length(args) > 1 do
+      s <> ", #{List.last(args)}"
+    else
+      s
+    end
+  end
 
+  def translate_push_command(register_name, arg2) do
+    ["@#{register_name}",
+     "D=M",
+     "@#{arg2}",
+     "A=D+A",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
+  def translate_pop_command(register_name, arg2) do
+    ["@#{register_name}", # get local address and stick in R13
+     "D=M",
+     "@#{arg2}",
+     "D=D+A",
+     "@R13",
+     "M=D",
+     get_top_item_on_stack(), # pop off stack
+     "D=M",
+     "@R13", # stick in local address
+     "A=M",
+     "M=D"]
+  end
+  
   def translate(file_name) do
     x = file_binary(file_name)
     |> read_lines()
