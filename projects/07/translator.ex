@@ -213,6 +213,20 @@ defmodule Translator do
      increment_stack_pointer()
     ]
   end
+  def translate_command([:C_PUSH, ["pointer", 0]]) do
+    ["@THIS",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
+  def translate_command([:C_PUSH, ["pointer", 1]]) do
+    ["@THAT",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
   def translate_command([:C_PUSH, ["local", arg2]]) do
     translate_push_command("LCL", arg2)
   end
@@ -242,6 +256,28 @@ defmodule Translator do
      "D=A",
      "@#{arg2}",
      "D=D+A",    # get temp + i address
+     "@R13",     # stick in R13
+     "M=D",
+     get_top_item_on_stack(), # pop off stack
+     "D=M",
+     "@R13", # stick in local address
+     "A=M",
+     "M=D"]
+  end
+  def translate_command([:C_POP, ["pointer", 0]]) do
+    ["@THIS",    # get pointer+0 base address
+     "D=A",
+     "@R13",     # stick in R13
+     "M=D",
+     get_top_item_on_stack(), # pop off stack
+     "D=M",
+     "@R13", # stick in local address
+     "A=M",
+     "M=D"]
+  end
+  def translate_command([:C_POP, ["pointer", 1]]) do
+    ["@THAT",    # get pointer+1 base address
+     "D=A",
      "@R13",     # stick in R13
      "M=D",
      get_top_item_on_stack(), # pop off stack
