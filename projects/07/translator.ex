@@ -327,4 +327,3 @@ defmodule Translator do
   end
 
 end
-
