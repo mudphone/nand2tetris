@@ -227,6 +227,13 @@ defmodule Translator do
      increment_stack_pointer()
     ]
   end
+  def translate_command([:C_PUSH, ["static", arg2]]) do
+    ["@translator.#{arg2}",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
   def translate_command([:C_PUSH, ["local", arg2]]) do
     translate_push_command("LCL", arg2)
   end
@@ -285,6 +292,13 @@ defmodule Translator do
      "@R13", # stick in local address
      "A=M",
      "M=D"]
+  end
+  def translate_command([:C_POP, ["static", arg2]]) do
+    [get_top_item_on_stack(),
+     "D=M",
+     "@translator.#{arg2}",
+     "M=D"
+    ]
   end
   def translate_command([cmd, args]) do
     s = "unknown cmd: #{cmd} - with args: #{List.first(args)}"
