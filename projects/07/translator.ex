@@ -85,12 +85,8 @@ defmodule Translator do
     end
   end
 
-  def pointer_arg_to_register do
-    case arg2 do
-      0 -> "THIS"
-      1 -> "THAT"
-    end
-  end
+  def pointer_arg_to_register(0), do: "THIS"
+  def pointer_arg_to_register(1), do: "THAT"
   
   def get_top_item_on_stack(), do: ["@SP","M=M-1","A=M"]
   def increment_stack_pointer(), do: ["@SP","M=M+1"]
