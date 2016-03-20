@@ -63,7 +63,6 @@ defmodule Translator do
     |> Enum.map(&String.strip/1)
     |> Enum.filter(fn(line) -> !boring_line?(line) end)  
     |> Enum.map(&parse_line/1)
-    # |> Enum.map(&translate_command/1)
     |> Enum.reduce({[],%{}}, &process_command/2)
     |> pick_out_and_flip()
   end
@@ -89,7 +88,6 @@ defmodule Translator do
   
   def parse_line(line) do
     # transforms line -> cmd_type, [arg1, arg2]
-    IO.puts("line: #{line}")
     cond do
       push_command?(line)   -> [:C_PUSH,  command_args(line)]
       pop_command?(line)    -> [:C_POP,   command_args(line)]
