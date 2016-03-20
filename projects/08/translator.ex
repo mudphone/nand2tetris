@@ -71,6 +71,7 @@ defmodule Translator do
   def pop_command?(line),    do: String.starts_with?(line, "pop")
   def label_command?(line),  do: String.starts_with?(line, "label")
   def ifgoto_command?(line), do: String.starts_with?(line, "if-goto")
+  def goto_command?(line),   do: String.starts_with?(line, "goto") 
   
   def parse_int(s) do
     {i,_} = Integer.parse(s)
@@ -93,6 +94,7 @@ defmodule Translator do
       pop_command?(line)    -> [:C_POP,   command_args(line)]
       label_command?(line)  -> [:C_LABEL, command_args(line)]
       ifgoto_command?(line) -> [:C_IF,    command_args(line)]
+      goto_command?(line)   -> [:C_GOTO,  command_args(line)]
       true -> [:C_ARITHMETIC, [line]]
     end
   end
@@ -101,11 +103,12 @@ defmodule Translator do
     Enum.reverse(acc)
     |> List.flatten
   end
-  
+
   def process_command(cmd, {acc, state}) do
     case cmd do
       [:C_LABEL, _] -> {[translate_command_using_state(cmd, state) | acc], state}
       [:C_IF, _]    -> {[translate_command_using_state(cmd, state) | acc], state}
+      [:C_GOTO, _]  -> {[translate_command_using_state(cmd, state) | acc], state}
       _             -> {[translate_command(cmd) | acc], state}
     end
   end
@@ -123,6 +126,11 @@ defmodule Translator do
     [get_top_item_on_stack(),
      "D=M",
      "@#{current_function(state)}$#{label}",
+     "D;JNE"
+    ]
+  end
+  def translate_command_using_state([:C_GOTO, [label]], state) do
+    ["@#{current_function(state)}$#{label}",
      "D;JNE"
     ]
   end
