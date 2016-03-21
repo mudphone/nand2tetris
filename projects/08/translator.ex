@@ -63,7 +63,9 @@ defmodule Translator do
     |> Enum.map(&String.strip/1)
     |> Enum.filter(fn(line) -> !boring_line?(line) end)  
     |> Enum.map(&parse_line/1)
-    |> Enum.reduce({[],%{}}, &process_command/2)
+    |> Enum.reduce({[],
+                    %{:current_function => []}},
+                   &process_command/2)
     |> pick_out_and_flip()
   end
   
@@ -72,7 +74,9 @@ defmodule Translator do
   def label_command?(line),  do: String.starts_with?(line, "label")
   def ifgoto_command?(line), do: String.starts_with?(line, "if-goto")
   def goto_command?(line),   do: String.starts_with?(line, "goto") 
-  
+  def vmfunction?(line),     do: String.starts_with?(line, "function")
+  def vmreturn?(line),       do: String.starts_with?(line, "return")
+
   def parse_int(s) do
     {i,_} = Integer.parse(s)
     i
@@ -90,11 +94,13 @@ defmodule Translator do
   def parse_line(line) do
     # transforms line -> cmd_type, [arg1, arg2]
     cond do
-      push_command?(line)   -> [:C_PUSH,  command_args(line)]
-      pop_command?(line)    -> [:C_POP,   command_args(line)]
-      label_command?(line)  -> [:C_LABEL, command_args(line)]
-      ifgoto_command?(line) -> [:C_IF,    command_args(line)]
-      goto_command?(line)   -> [:C_GOTO,  command_args(line)]
+      push_command?(line)   -> [:C_PUSH,     command_args(line)]
+      pop_command?(line)    -> [:C_POP,      command_args(line)]
+      label_command?(line)  -> [:C_LABEL,    command_args(line)]
+      ifgoto_command?(line) -> [:C_IF,       command_args(line)]
+      goto_command?(line)   -> [:C_GOTO,     command_args(line)]
+      vmfunction?(line)     -> [:C_FUNCTION, command_args(line)]
+      vmreturn?(line)       -> [:C_RETURN,   []]
       true -> [:C_ARITHMETIC, [line]]
     end
   end
@@ -106,9 +112,15 @@ defmodule Translator do
 
   def process_command(cmd, {acc, state}) do
     case cmd do
-      [:C_LABEL, _] -> {[translate_command_using_state(cmd, state) | acc], state}
-      [:C_IF, _]    -> {[translate_command_using_state(cmd, state) | acc], state}
-      [:C_GOTO, _]  -> {[translate_command_using_state(cmd, state) | acc], state}
+      [:C_FUNCTION, _] ->
+        {lines, s} = translate_command_updating_state(cmd, state)
+        {[lines | acc], s}
+      [:C_RETURN, _] ->
+        {lines, s} = translate_command_updating_state(cmd, state)
+        {[lines | acc], s}
+      [:C_LABEL, _] -> {[translate_command_reading_state(cmd, state) | acc], state}
+      [:C_IF, _]    -> {[translate_command_reading_state(cmd, state) | acc], state}
+      [:C_GOTO, _]  -> {[translate_command_reading_state(cmd, state) | acc], state}
       _             -> {[translate_command(cmd) | acc], state}
     end
   end
@@ -116,25 +128,94 @@ defmodule Translator do
   def pointer_arg_to_register(0), do: "THIS"
   def pointer_arg_to_register(1), do: "THAT"
   
-  def get_top_item_on_stack(), do: ["@SP","M=M-1","A=M"]
+  def get_top_item_on_stack(),   do: ["@SP","M=M-1","A=M"]
   def increment_stack_pointer(), do: ["@SP","M=M+1"]
-  def set_top_of_stack_to(s), do: ["@SP","A=M","M=#{s}"]
+  def set_top_of_stack_to(s),    do: ["@SP","A=M","M=#{s}"]
 
-  def current_function(state), do: Map.get(state, :current_function, "null")
-  
-  def translate_command_using_state([:C_IF, [label]], state) do
+  def current_function(%{:current_function => []}), do: "null"
+  def current_function(%{:current_function => [h | _]}), do: h
+  def set_current_function(name, %{:current_function => func_stack} = state) do
+    Map.put(state, :current_function, [name | func_stack])
+  end
+  def pop_current_function(%{:current_function => [_ | t]} = state) do
+    {t, Map.put(state, :current_function, t)}
+  end
+
+  def translate_command_updating_state([:C_RETURN, []], state) do
+    {_, s} = pop_current_function(state)
+    lines = ["@LCL",
+             "D=M",
+             "@R5",   # FRAME = LCL
+             "M=D",
+             "@5",
+             "D=D-A",
+             "@R6",   # RET = *(FRAME-5)
+             "M=D",
+             get_top_item_on_stack(), # *ARG = pop()
+             "D=M",
+             "@ARG",
+             "A=M",
+             "M=D",
+             "@ARG",
+             "D=M+1", # SP = ARG+1
+             "@SP",
+             "M=D",
+             "@R5",   # THAT = *(FRAME-1)
+             "A=M-1",
+             "D=M",
+             "@THAT",
+             "M=D",
+             "@R5",   # THIS = *(FRAME-2)
+             "D=M",
+             "@2",
+             "A=D-A",
+             "D=M",
+             "@THIS",
+             "M=D",
+             "@R5",   # ARG = *(FRAME-3)
+             "D=M",
+             "@3",
+             "A=D-A",
+             "D=M",
+             "@ARG",
+             "M=D",
+             "@R5",   # LCL = *(FRAME-4)
+             "D=M",
+             "@4",
+             "A=D-A",
+             "D=M",
+             "@LCL",
+             "M=D",
+             "@R6",   # goto RET
+             "A=M",
+             "0;JMP"
+            ]
+    {lines, s}
+  end
+  def translate_command_updating_state([:C_FUNCTION, [name, num_args]], state) do
+    s = set_current_function(name, state)
+    lines = ["(#{current_function(s)})"]
+    if num_args > 0 do
+      lines = lines ++ Enum.map(1..num_args, fn(_) ->
+        [set_top_of_stack_to("0"),
+         increment_stack_pointer()]
+      end)
+    end
+    {lines, s}
+  end
+  def translate_command_reading_state([:C_IF, [label]], state) do
     [get_top_item_on_stack(),
      "D=M",
      "@#{current_function(state)}$#{label}",
      "D;JNE"
     ]
   end
-  def translate_command_using_state([:C_GOTO, [label]], state) do
+  def translate_command_reading_state([:C_GOTO, [label]], state) do
     ["@#{current_function(state)}$#{label}",
      "D;JNE"
     ]
   end
-  def translate_command_using_state([:C_LABEL, [label]], state) do
+  def translate_command_reading_state([:C_LABEL, [label]], state) do
     ["(#{current_function(state)}$#{label})"]
   end
   def translate_command([:C_ARITHMETIC, ["add"]]) do
