@@ -57,14 +57,15 @@ defmodule Translator do
     |> List.first
   end
   
-  def read_lines(file_binary) do
+  def read_lines(file_binary, file_base) do
     String.splitter(file_binary, "\n")
     |> Enum.map(&strip_trailing_comments/1)
     |> Enum.map(&String.strip/1)
     |> Enum.filter(fn(line) -> !boring_line?(line) end)  
     |> Enum.map(&parse_line/1)
     |> Enum.reduce({[],
-                    %{:current_function => []}},
+                    %{:current_function => [],
+                      :file_base        => file_base}},
                    &process_command/2)
     |> pick_out_and_flip()
   end
@@ -118,6 +119,10 @@ defmodule Translator do
       [:C_RETURN, _] ->
         {lines, s} = translate_command_updating_state(cmd, state)
         {[lines | acc], s}
+      [:C_PUSH, ["static", _]] ->
+        {[translate_command_reading_state(cmd, state) | acc], state}
+      [:C_POP, ["static", _]] ->
+        {[translate_command_reading_state(cmd, state) | acc], state}
       [:C_LABEL, _] -> {[translate_command_reading_state(cmd, state) | acc], state}
       [:C_IF, _]    -> {[translate_command_reading_state(cmd, state) | acc], state}
       [:C_GOTO, _]  -> {[translate_command_reading_state(cmd, state) | acc], state}
@@ -203,6 +208,21 @@ defmodule Translator do
     end
     {lines, s}
   end
+
+  def translate_command_reading_state([:C_PUSH, ["static", arg2]], %{:file_base => file_base}) do
+    ["@#{file_base}.#{arg2}",
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer()
+    ]
+  end
+  def translate_command_reading_state([:C_POP, ["static", arg2]], %{:file_base => file_base}) do
+    [get_top_item_on_stack(),
+     "D=M",
+     "@#{file_base}.#{arg2}",
+     "M=D"
+    ]
+  end
   def translate_command_reading_state([:C_IF, [label]], state) do
     [get_top_item_on_stack(),
      "D=M",
@@ -218,6 +238,7 @@ defmodule Translator do
   def translate_command_reading_state([:C_LABEL, [label]], state) do
     ["(#{current_function(state)}$#{label})"]
   end
+  
   def translate_command([:C_ARITHMETIC, ["add"]]) do
     [get_top_item_on_stack(),  # get top item on stack: y
      "D=M",                    # and assign to D register
@@ -349,13 +370,6 @@ defmodule Translator do
      increment_stack_pointer()
     ]
   end
-  def translate_command([:C_PUSH, ["static", arg2]]) do
-    ["@translator.#{arg2}",
-     "D=M",
-     set_top_of_stack_to("D"),
-     increment_stack_pointer()
-    ]
-  end
   def translate_command([:C_PUSH, ["local", arg2]]) do
     translate_push_command("LCL", arg2)
   end
@@ -404,13 +418,6 @@ defmodule Translator do
      "A=M",
      "M=D"]
   end
-  def translate_command([:C_POP, ["static", arg2]]) do
-    [get_top_item_on_stack(),
-     "D=M",
-     "@translator.#{arg2}",
-     "M=D"
-    ]
-  end
   def translate_command([cmd, args]) do
     s = "unknown cmd: #{cmd} - with args: #{List.first(args)}"
     if length(args) > 1 do
@@ -445,11 +452,12 @@ defmodule Translator do
   end
   
   def translate(file_name) do
+    basename_no_prefix = Path.basename(file_name, ".vm")
     x = file_binary(file_name)
-    |> read_lines()
+    |> read_lines(basename_no_prefix)
     |> Enum.join("\n")
 
-    File.write("output.asm", x)
+    File.write("#{basename_no_prefix}.asm", x)
   end
 
 end
