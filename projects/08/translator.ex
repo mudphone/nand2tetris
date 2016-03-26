@@ -64,20 +64,21 @@ defmodule Translator do
     |> Enum.filter(fn(line) -> !boring_line?(line) end)  
     |> Enum.map(&parse_line/1)
     |> Enum.reduce({[],
-                    %{:current_function => [],
+                    %{:current_function => nil,
                       :file_base        => file_base}},
                    &process_command/2)
     |> pick_out_and_flip()
   end
   
-  def push_command?(line),   do: String.starts_with?(line, "push")
-  def pop_command?(line),    do: String.starts_with?(line, "pop")
-  def label_command?(line),  do: String.starts_with?(line, "label")
-  def ifgoto_command?(line), do: String.starts_with?(line, "if-goto")
-  def goto_command?(line),   do: String.starts_with?(line, "goto") 
-  def vmfunction?(line),     do: String.starts_with?(line, "function")
-  def vmreturn?(line),       do: String.starts_with?(line, "return")
-
+  def push_command?(line),     do: String.starts_with?(line, "push")
+  def pop_command?(line),      do: String.starts_with?(line, "pop")
+  def label_command?(line),    do: String.starts_with?(line, "label")
+  def ifgoto_command?(line),   do: String.starts_with?(line, "if-goto")
+  def goto_command?(line),     do: String.starts_with?(line, "goto") 
+  def function_command?(line), do: String.starts_with?(line, "function")
+  def return_command?(line),   do: String.starts_with?(line, "return")
+  def call_command?(line),     do: String.starts_with?(line, "call")
+  
   def parse_int(s) do
     {i,_} = Integer.parse(s)
     i
@@ -95,13 +96,14 @@ defmodule Translator do
   def parse_line(line) do
     # transforms line -> cmd_type, [arg1, arg2]
     cond do
-      push_command?(line)   -> [:C_PUSH,     command_args(line)]
-      pop_command?(line)    -> [:C_POP,      command_args(line)]
-      label_command?(line)  -> [:C_LABEL,    command_args(line)]
-      ifgoto_command?(line) -> [:C_IF,       command_args(line)]
-      goto_command?(line)   -> [:C_GOTO,     command_args(line)]
-      vmfunction?(line)     -> [:C_FUNCTION, command_args(line)]
-      vmreturn?(line)       -> [:C_RETURN,   []]
+      push_command?(line)     -> [:C_PUSH,     command_args(line)]
+      pop_command?(line)      -> [:C_POP,      command_args(line)]
+      label_command?(line)    -> [:C_LABEL,    command_args(line)]
+      ifgoto_command?(line)   -> [:C_IF,       command_args(line)]
+      goto_command?(line)     -> [:C_GOTO,     command_args(line)]
+      function_command?(line) -> [:C_FUNCTION, command_args(line)]
+      return_command?(line)   -> [:C_RETURN,   []]
+      call_command?(line)     -> [:C_CALL,     command_args(line)]
       true -> [:C_ARITHMETIC, [line]]
     end
   end
@@ -114,9 +116,6 @@ defmodule Translator do
   def process_command(cmd, {acc, state}) do
     case cmd do
       [:C_FUNCTION, _] ->
-        {lines, s} = translate_command_updating_state(cmd, state)
-        {[lines | acc], s}
-      [:C_RETURN, _] ->
         {lines, s} = translate_command_updating_state(cmd, state)
         {[lines | acc], s}
       [:C_PUSH, ["static", _]] ->
@@ -137,66 +136,11 @@ defmodule Translator do
   def increment_stack_pointer(), do: ["@SP","M=M+1"]
   def set_top_of_stack_to(s),    do: ["@SP","A=M","M=#{s}"]
 
-  def current_function(%{:current_function => []}), do: "null"
-  def current_function(%{:current_function => [h | _]}), do: h
-  def set_current_function(name, %{:current_function => func_stack} = state) do
-    Map.put(state, :current_function, [name | func_stack])
-  end
-  def pop_current_function(%{:current_function => [_ | t]} = state) do
-    {t, Map.put(state, :current_function, t)}
-  end
+  def current_function(%{:current_function => nil}), do: "null"
+  def current_function(%{:current_function => cf}), do: cf
 
-  def translate_command_updating_state([:C_RETURN, []], state) do
-    {_, s} = pop_current_function(state)
-    lines = ["@LCL",
-             "D=M",
-             "@R5",   # FRAME = LCL
-             "M=D",
-             "@5",
-             "D=D-A",
-             "@R6",   # RET = *(FRAME-5)
-             "M=D",
-             get_top_item_on_stack(), # *ARG = pop()
-             "D=M",
-             "@ARG",
-             "A=M",
-             "M=D",
-             "@ARG",
-             "D=M+1", # SP = ARG+1
-             "@SP",
-             "M=D",
-             "@R5",   # THAT = *(FRAME-1)
-             "A=M-1",
-             "D=M",
-             "@THAT",
-             "M=D",
-             "@R5",   # THIS = *(FRAME-2)
-             "D=M",
-             "@2",
-             "A=D-A",
-             "D=M",
-             "@THIS",
-             "M=D",
-             "@R5",   # ARG = *(FRAME-3)
-             "D=M",
-             "@3",
-             "A=D-A",
-             "D=M",
-             "@ARG",
-             "M=D",
-             "@R5",   # LCL = *(FRAME-4)
-             "D=M",
-             "@4",
-             "A=D-A",
-             "D=M",
-             "@LCL",
-             "M=D",
-             "@R6",   # goto RET
-             "A=M",
-             "0;JMP"
-            ]
-    {lines, s}
-  end
+  def set_current_function(name, state), do: Map.put(state, :current_function, name)
+ 
   def translate_command_updating_state([:C_FUNCTION, [name, num_args]], state) do
     s = set_current_function(name, state)
     lines = ["(#{current_function(s)})"]
@@ -232,13 +176,100 @@ defmodule Translator do
   end
   def translate_command_reading_state([:C_GOTO, [label]], state) do
     ["@#{current_function(state)}$#{label}",
-     "D;JNE"
+     "0;JMP"
     ]
   end
   def translate_command_reading_state([:C_LABEL, [label]], state) do
     ["(#{current_function(state)}$#{label})"]
   end
   
+  def translate_command([:C_CALL, [f, n]]) do
+    label = "return-address$#{UUID.generate()}"
+    ["@#{label}",               # push return-address
+     "D=A",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer(),
+     "@LCL",                    # push LCL
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer(),
+     "@ARG",                    # push ARG
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer(),
+     "@THIS",                   # push THIS
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer(),
+     "@THAT",                   # push THAT
+     "D=M",
+     set_top_of_stack_to("D"),
+     increment_stack_pointer(),
+     "@SP",                     # ARG = SP-n-5
+     "D=M",
+     "@#{n+5}",
+     "D=D-A",
+     "@ARG",
+     "M=D",
+     "@SP",                     # LCL = SP
+     "D=M",
+     "@LCL",
+     "M=D",
+     "@#{f}",                   # goto f
+     "0;JMP",
+     "(#{label})"
+    ]
+  end
+  def translate_command([:C_RETURN, []]) do
+    ["@LCL",
+     "D=M",
+     "@R5",   # FRAME = LCL
+     "M=D",
+     "@5",
+     "A=D-A",
+     "D=M",
+     "@R6",   # RET = *(FRAME-5)
+     "M=D",
+     get_top_item_on_stack(), # *ARG = pop()
+     "D=M",
+     "@ARG",
+     "A=M",
+     "M=D",
+     "@ARG",
+     "D=M+1", # SP = ARG+1
+     "@SP",
+     "M=D",
+     "@R5",   # THAT = *(FRAME-1)
+     "A=M-1",
+     "D=M",
+     "@THAT",
+     "M=D",
+     "@R5",   # THIS = *(FRAME-2)
+     "D=M",
+     "@2",
+     "A=D-A",
+     "D=M",
+     "@THIS",
+     "M=D",
+     "@R5",   # ARG = *(FRAME-3)
+     "D=M",
+     "@3",
+     "A=D-A",
+     "D=M",
+     "@ARG",
+     "M=D",
+     "@R5",   # LCL = *(FRAME-4)
+     "D=M",
+     "@4",
+     "A=D-A",
+     "D=M",
+     "@LCL",
+     "M=D",
+     "@R6",   # goto RET
+     "A=M",
+     "0;JMP"
+    ]
+  end
   def translate_command([:C_ARITHMETIC, ["add"]]) do
     [get_top_item_on_stack(),  # get top item on stack: y
      "D=M",                    # and assign to D register
@@ -450,14 +481,52 @@ defmodule Translator do
      "A=M",
      "M=D"]
   end
-  
-  def translate(file_name) do
-    basename_no_prefix = Path.basename(file_name, ".vm")
-    x = file_binary(file_name)
-    |> read_lines(basename_no_prefix)
-    |> Enum.join("\n")
 
-    File.write("#{basename_no_prefix}.asm", x)
+  def translate_file(file_name) do
+    basename_no_prefix = Path.basename(file_name, ".vm")
+    IO.puts "translating file: #{file_name}"
+    file_binary(file_name)
+    |> read_lines(basename_no_prefix)
   end
+
+  def bootstrap(lines) do
+    ["@256", # Initialize the stack pointer to 0x0100
+     "D=A",
+     "@SP",
+     "M=D",
+     translate_command([:C_CALL, ["Sys.init", 0]])
+     | lines]
+  end
+  
+  def translate(path) do
+    basename_no_prefix = Path.basename(path, ".vm")
+
+    x = find_vm_files(path)
+    |> Enum.map(&translate_file/1)
+    |> bootstrap()
+    |> List.flatten
+    |> Enum.join("\n")
+    
+    # x = file_binary(file_name)
+    # |> read_lines(basename_no_prefix)
+    # |> Enum.join("\n")
+
+    File.write("#{basename_no_prefix}.asm", x, [:append])
+  end
+
+  def vm_file?(path), do: ".vm" == Path.extname(path)
+
+  def find_files(path) do
+    cond do
+      File.dir?(path) ->
+        {:ok, ls_files} = File.ls(path)
+        ls_files
+        |> Enum.map(fn(fname) -> "#{path}/" <> fname end)
+      true ->
+        [path]
+    end
+  end
+  
+  def find_vm_files(path), do: Enum.filter(find_files(path), &vm_file?/1)
 
 end
