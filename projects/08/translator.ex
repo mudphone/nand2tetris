@@ -482,11 +482,10 @@ defmodule Translator do
      "M=D"]
   end
 
+  def vmfile_basename_no_prefix(path), do: Path.basename(path, ".vm")
   def translate_file(file_name) do
-    basename_no_prefix = Path.basename(file_name, ".vm")
-    IO.puts "translating file: #{file_name}"
     file_binary(file_name)
-    |> read_lines(basename_no_prefix)
+    |> read_lines(vmfile_basename_no_prefix(file_name))
   end
 
   def bootstrap(lines) do
@@ -499,18 +498,13 @@ defmodule Translator do
   end
   
   def translate(path) do
-    basename_no_prefix = Path.basename(path, ".vm")
-
     x = find_vm_files(path)
     |> Enum.map(&translate_file/1)
     |> bootstrap()
     |> List.flatten
     |> Enum.join("\n")
     
-    # x = file_binary(file_name)
-    # |> read_lines(basename_no_prefix)
-    # |> Enum.join("\n")
-
+    basename_no_prefix = vmfile_basename_no_prefix(path)
     File.write("#{basename_no_prefix}.asm", x, [:append])
   end
 
