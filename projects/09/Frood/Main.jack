@@ -1,0 +1,16 @@
+/**
+ * The Frood program! 
+ */
+class Main {
+
+  /** Initializes a new Frood. */    
+  function void main() {
+    var FroodGame game;
+
+    let game = FroodGame.new();
+    do game.run();
+    do game.dispose();
+
+    return;
+  }
+}

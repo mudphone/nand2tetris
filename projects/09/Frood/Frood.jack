@@ -1,0 +1,27 @@
+class Frood {
+
+  field int x, y;
+  field int size;
+  
+  constructor Frood new(int _x, int _y, int _size) {
+    let x = _x;
+    let y = _y;
+    let size = _size;
+
+    do draw();
+    
+    return this;
+  }
+
+  method void draw() {
+    do Screen.setColor(true);
+    do Screen.drawRectangle(x, y, x + size, y + size);
+    return;
+  }
+
+  method void dispose() {
+    do Memory.deAlloc(this);
+    return;
+  }
+
+}

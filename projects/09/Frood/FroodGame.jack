@@ -1,0 +1,78 @@
+class FroodGame {
+
+  field Frood frood;
+
+  constructor FroodGame new() {
+    let frood = Frood.new(10, 20, 30);
+    return this;
+  }
+
+  method void dispose() {
+    do frood.dispose();
+    do Memory.deAlloc(this);
+    return;
+  }
+
+  method void run() {
+    var char key;
+    var boolean exit;
+
+    let exit = false;
+
+    while (~exit) {
+      // waits for a key to be pressed.
+      while (key = 0) {
+        let key = Keyboard.keyPressed();
+        // do moveSquare();
+      }
+
+      if (key = 81) {
+        let exit = true;
+      }
+      // if (key = 90) {
+      //     do square.decSize();
+      // }
+      // if (key = 88) {
+      //     do square.incSize();
+      // }
+      // if (key = 131) {
+      //     let direction = 1;
+      // }
+      // if (key = 133) {
+      //     let direction = 2;
+      // }
+      // if (key = 130) {
+      //     let direction = 3;
+      // }
+      // if (key = 132) {
+      //     let direction = 4;
+      // }
+
+      // waits for the key to be released.
+      while (~(key = 0)) {
+        let key = Keyboard.keyPressed();
+        // do moveSquare();
+      }
+    }
+            
+    return;
+  }
+
+    // method void moveSquare() {
+    //     if (direction = 1) {
+    //         do square.moveUp();
+    //     }
+    //     if (direction = 2) {
+    //         do square.moveDown();
+    //     }
+    //     if (direction = 3) {
+    //         do square.moveLeft();
+    //     }
+    //     if (direction = 4) {
+    //         do square.moveRight();
+    //     }
+
+    //     do Sys.wait(5); // Delays the next movement.
+    //     return;
+    // }
+}
