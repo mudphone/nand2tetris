@@ -60,16 +60,21 @@ defmodule Tokenizer do
   end
 
   def split_all_words(words, []), do: words
+
+  def to_token_tup(t) when t in @jack_symbols,  do: {:symbol,  t}
+  def to_token_tup(t) when t in @jack_keywords, do: {:keyword, t}
+  def to_token_tup(t), do: {:identifier, t}
   
   def tokenize(lines) do
     split_lines(lines)
     |> remove_comments()
     |> split_all_words(@jack_symbols)
+    |> Enum.map(&to_token_tup/1)
   end
 
-  def xml_word(w) when w in @jack_symbols, do: "<symbol> #{w} </symbol>"
-  def xml_word(w) when w in @jack_keywords, do: "<keyword> #{w} </keyword>"
-  def xml_word(w), do: "<identifier> #{w} </identifier>"
+  def xml_word({:symbol, w}),  do: "<symbol> #{w} </symbol>"
+  def xml_word({:keyword, w}), do: "<keyword> #{w} </keyword>"
+  def xml_word({_, w}),        do: "<identifier> #{w} </identifier>"
   
   def tokenize_xml(lines) do
     ["<tokens>"] ++ Enum.map(tokenize(lines), &xml_word/1) ++ ["</tokens>"]
