@@ -1,4 +1,9 @@
 defmodule Tokenizer do
+  alias Env
+  
+  defmodule Env do
+	  defstruct str_const: nil, comments: 0, acc: ""
+  end
 
   @jack_keywords ["class", "constructor", "function", "method",
                   "field", "static", "var", "int", "char", "boolean",
@@ -9,68 +14,71 @@ defmodule Tokenizer do
                  "+", "-", "*", "/", "&", "|", "<", ">", "=",
                  "~"]
 
+  @doc """
+  Chomps off the front character and tokenizes based on what it finds
+  """
+  # Starts chomping off a multi-line comment
+  def bite("/*" <> rest, %Env{comments: level}=env) do
+    bite(rest, %Env{env | comments: level + 1})
+  end
+
+  # Finishes chomping off a multi-line comment
+  def bite("*/" <> rest, %Env{comments: level}=env) do
+    bite(rest, %{env | comments: level - 1})
+  end
+
+  # Continues chomping off a multi-line comment
+  def bite(<<_>> <> rest, %Env{comments: level}=env) when level > 0 do
+    bite(rest, env)
+  end
+
+  # Starts storing a string constant
+  def bite("\"" <> rest, %Env{str_const: nil}) do
+    bite(rest, %Env{str_const: "\""})
+  end
+
+  # Finishes storing a string constant
+  def bite("\"" <> rest, %Env{str_const: str_const}=env) do
+    [to_token_tup(str_const <> "\"")]
+    ++ bite(rest, %Env{env | str_const: nil})
+  end
+
+  # Continues storing a string constant
+  def bite(<<f>> <> rest, %Env{str_const: str_const}=env) when not is_nil(str_const) do
+    bite(rest, %Env{env | str_const: str_const <> <<f>>})
+  end
+
+  # Hasn't saved any characters, so just saves the Jack symbol
+  def bite(<<f>> <> rest, %Env{acc: ""}=env) when <<f>> in @jack_symbols do
+    [to_token_tup(<<f>>)]
+    ++ bite(rest, %Env{env | acc: ""})
+  end
+
+  # Emits saved characters and Jack symbol
+  def bite(<<f>> <> rest, %Env{acc: acc}=env) when <<f>> in @jack_symbols do
+    [to_token_tup(acc), to_token_tup(<<f>>)]
+    ++ bite(rest, %Env{env | acc: ""})
+  end
+
+  # Handles multiple spaces
+  def bite(<<f>> <> rest, %Env{acc: ""}=env) when f == ?\s do
+    bite(rest, %Env{env | acc: ""})
+  end
+
+  # Emits saved characters lying before a space
+  def bite(<<f>> <> rest, %Env{acc: acc}=env) when f == ?\s do
+    [to_token_tup(acc)]
+    ++ bite(rest, %Env{env | acc: ""})
+  end
+
+  # Save characters until we encounter a delimiter
+  def bite(<<f>> <> rest, %Env{acc: acc}=env) when not <<f>> in @jack_symbols and f != ?\s do
+    bite(rest, %Env{env | acc: acc <> <<f>>})
+  end
+
+  # Nothing left to chomp off
+  def bite("", _), do: []
   
-  
-  def get_while(p, [h|rest]) do
-    if p.(h) do
-      {succeeds, remainder} = get_while(p, rest)
-    end
-  end
-
-  def split_lines(lines) do
-    Enum.reduce(lines, &(&2 <> " " <> &1))
-    |> String.split
-  end
-
-  def concat_str_constants([("\"" <> _)=str_const | rest], nil) do
-    concat_str_constants(rest, str_const)
-  end
-  def concat_str_constants([end_const|rest], acc)
-  when binary_part(end_const, byte_size(end_const)-1, 1) == "\"" do
-    ["#{acc} #{end_const}"] ++ concat_str_constants(rest, nil)
-  end
-  def concat_str_constants([f|rest], acc) when not is_nil(acc) do
-    concat_str_constants(rest, "#{acc} #{f}")
-  end
-  def concat_str_constants([f|rest], nil) do
-    [f] ++ concat_str_constants(rest, nil)
-  end
-  def concat_str_constants([], nil), do: []
-  
-  def remove_comments(words), do: remove_comments(words, 0)
-  def remove_comments(["/*" <> _ | rest], level) do
-    remove_comments(rest, level + 1)
-  end
-  def remove_comments([end_comment | rest], level)
-  when binary_part(end_comment, byte_size(end_comment)-2, 2) == "*/" do
-    remove_comments(rest, level - 1)
-  end
-  def remove_comments([_|rest], level) when level > 0 do
-    remove_comments(rest, level)
-  end
-  def remove_comments([f|rest], level) when level == 0 do
-    [f] ++ remove_comments(rest, level)
-  end
-  def remove_comments([], 0), do: []
-
-  def split_word(word, delim) do
-    String.split(word, delim)
-    |> Enum.intersperse(delim)
-    |> Enum.filter(&(&1 != ""))
-  end
-
-  def split_words_on(words, delim) do
-    Enum.map(words, &split_word(&1, delim))
-    |> List.flatten
-  end
-
-  def split_all_words(words, [delim | rest]) do
-    split_words_on(words, delim)
-    |> split_all_words(rest)
-  end
-
-  def split_all_words(words, []), do: words
-
   def to_token_tup(t) when t in @jack_symbols,  do: {:symbol,  t}
   def to_token_tup(t) when t in @jack_keywords, do: {:keyword, t}
   def to_token_tup(t) do
@@ -96,11 +104,8 @@ defmodule Tokenizer do
   end
   
   def tokenize(lines) do
-    split_lines(lines)
-    |> remove_comments()
-    |> split_all_words(@jack_symbols)
-    |> concat_str_constants(nil)
-    |> Enum.map(&to_token_tup/1)
+    Enum.join(lines)
+    |> bite(%Env{})
   end
 
   def xml_word({:symbol, "<"}),        do: "<symbol> &lt; </symbol>"
