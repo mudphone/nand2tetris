@@ -12,10 +12,8 @@ defmodule Parser do
       "  <keyword> class </keyword>",
       "  <identifier> #{class_name} </identifier>",
       "  <symbol> { </symbol>"]
-     ++
-     class_var_decs
-     ++
-     subroutines
+     ++ class_var_decs
+     ++ subroutines
      ++
      ["  <symbol> } </symbol>",
       "</class>"], rest2}
@@ -69,10 +67,8 @@ defmodule Parser do
       "    <keyword> #{cfm} </keyword>",
       "    <#{keyword_or_identifier}> #{vort} </#{keyword_or_identifier}>",
       "    <identifier> #{subroutine_name} </identifier>"]
-     ++
-     parameter_list
-     ++
-     subroutine_body
+     ++ parameter_list
+     ++ subroutine_body
      ++
      ["  </subroutineDec>"] ++ more, rest3}
   end
@@ -83,8 +79,7 @@ defmodule Parser do
     {params, rest1} = parse_parameters(rest)
     {["    <symbol> ( </symbol>",
       "    <parameterList>"]
-     ++
-     params
+     ++ params
      ++
      ["    </parameterList>",
       "    <symbol> ) </symbol>"], rest1}
@@ -112,10 +107,8 @@ defmodule Parser do
     {statements, rest2} = parse_statements(rest1)
     {["    <subroutineBody>",
       "      <symbol> { </symbol>"]
-     ++
-     var_decs
-     ++
-     statements
+     ++ var_decs
+     ++ statements
      ++
      ["      <symbol> } </symbol>",
       "    </subroutineBody>"], rest2}
@@ -145,8 +138,9 @@ defmodule Parser do
   end
 
   def parse_var_dec_end([{:symbol, ";"} | rest]) do
+    {more, rest1} = parse_var_dec(rest)
     {["        <symbol> ; </symbol>",
-      "      </varDec>"], rest}
+      "      </varDec>"] ++ more, rest1}
   end
 
     
@@ -154,8 +148,7 @@ defmodule Parser do
                         | _]=all) when keyword in @jack_statements do
     {statements, rest} = parse_statement(all)
     {["      <statements>"]
-     ++
-     statements
+     ++ statements
      ++
      ["      </statements>"], rest}
   end
@@ -205,8 +198,24 @@ defmodule Parser do
       "        </ifStatement>"] ++ more, rest5}
   end
   
-  def parse_statement([{:keyword, "while"} | rest]) do
-    []
+  def parse_statement([{:keyword, "while"},
+                       {:symbol, "("}| rest]) do
+    {exp, rest1} = parse_expression(rest)
+    [{:symbol, ")"},
+     {:symbol, "{"}| rest2] = rest1
+    {statements, rest3} = parse_statements(rest2)
+    {more, rest4} = parse_statement(rest3)
+    {["        <whileStatement>",
+      "          <keyword> while </keyword>",
+      "          <symbol> ( </symbol>"]
+     ++ exp
+     ++
+     ["          <symbol> ) </symbol>",
+      "          <symbol> { </symbol>"]
+     ++ statements
+     ++
+     ["          <symbol> } </symbol>",
+      "        </whileStatement>"] ++ more, rest4}
   end
 
   def parse_statement([{:keyword, "do"} | rest]) do
@@ -215,8 +224,7 @@ defmodule Parser do
     {statement, rest3} = parse_statement(rest2)
     {["        <doStatement>",
       "          <keyword> do </keyword>"]
-     ++
-     subroutine_call
+     ++ subroutine_call
      ++
      ["          <symbol> ; </symbol>",
       "        </doStatement>"] ++ statement, rest3}
@@ -239,8 +247,7 @@ defmodule Parser do
     {statement, rest3} = parse_statement(rest2)
     {["        <returnStatement>",
       "          <keyword> return </keyword>"]
-     ++
-     expression
+     ++ expression
      ++
      ["          <symbol> ; </symbol>",
       "        </returnStatement>"]
@@ -269,8 +276,7 @@ defmodule Parser do
     {exp_list, rest1} = parse_expression_list(rest)
     {["          <identifier> #{subroutine_name} </identifier>",
       "          <symbol> ( </symbol>"]
-     ++
-     exp_list
+     ++ exp_list
      ++
      ["          <symbol> ) </symbol>"], rest1}
   end
@@ -285,8 +291,7 @@ defmodule Parser do
       "          <symbol> . </symbol>",
       "          <identifier> #{subroutine_name} </identifier>",
       "          <symbol> ( </symbol>"]
-     ++
-     exp_list
+     ++ exp_list
      ++
      ["          <symbol> ) </symbol>"], rest1}
   end
@@ -300,8 +305,7 @@ defmodule Parser do
     {exp, rest} = parse_expression(all)
     [{:symbol, ")"} | rest1] = rest
     {["          <expressionList>"]
-     ++
-     exp
+     ++ exp
      ++
      ["          </expressionList>"], rest1}
   end
