@@ -16,7 +16,26 @@ defmodule SyntaxAnalyzer do
     |> LineReader.read_lines()
   end
 
-  def tokenize_xml(path) do    
+  def tokenize(path) do
+    translate_file(path)
+    |> Tokenizer.tokenize()
+  end
+
+  def parse(path) do
+    tokenize(path)
+    |> Parser.parse()
+  end
+
+  def parse_to_xml(path) do
+    {lines, _} = parse(path)
+    x = Enum.join(lines, "\n")
+    
+    basename = jackfile_basename_no_prefix(path)
+    dirname = Path.dirname(path)
+    File.write("#{dirname}/KO_#{basename}.xml", x, [:append])    
+  end
+
+  def tokenize_to_xml(path) do    
     x = translate_file(path)
     |> Tokenizer.tokenize_xml()
     |> Enum.join("\n")
@@ -26,9 +45,9 @@ defmodule SyntaxAnalyzer do
     File.write("#{dirname}/KO_#{basename}T.xml", x, [:append])
   end
 
-  def tokenize_xml_all(path) do
+  def tokenize_all_to_xml(path) do
     find_jack_files(path)
-    |> Enum.map(&tokenize_xml/1)
+    |> Enum.map(&tokenize_to_xml/1)
   end
   
   def jack_file?(path), do: ".jack" == Path.extname(path)
