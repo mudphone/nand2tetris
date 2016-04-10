@@ -6,26 +6,65 @@ defmodule Parser do
              {:identifier, class_name},
              {:symbol, "{"}
              | rest]) do
-    {subroutines, rest1} = parse(rest)
-    [{:symbol, "}"}] = rest1
+    {class_var_decs, rest1} = parse_class_vars(rest)
+    {subroutines, rest2} = parse_subroutines(rest1)
     {["<class>",
       "  <keyword> class </keyword>",
       "  <identifier> #{class_name} </identifier>",
       "  <symbol> { </symbol>"]
      ++
+     class_var_decs
+     ++
      subroutines
      ++
      ["  <symbol> } </symbol>",
-      "</class>"], []}
+      "</class>"], rest2}
   end
 
-  def parse([{:keyword, cfm},
+  def parse([{_, x} | rest]) do
+    {["<other> #{x} <other>"], rest}
+  end
+
+  def parse([]), do: {[], []}
+
+  def parse_class_vars([{:keyword, static_or_field},
+                        {keyword_or_identifier, type},
+                        {:identifier, var_name}
+                        | rest])
+  when static_or_field in ["static", "field"] do
+    {more, rest1} = parse_class_vars_end(rest)
+    {["  <classVarDec>",
+      "    <keyword> #{static_or_field} </keyword>",
+      "    <#{keyword_or_identifier}> #{type} </#{keyword_or_identifier}>",
+      "    <identifier> #{var_name} </identifier>",
+      ] ++ more, rest1}
+  end
+
+  def parse_class_vars(all), do: {[], all}
+
+  def parse_class_vars_end([{:symbol, ","},
+                            {:identifier, var_name}
+                            | rest]) do
+    {var, rest1} = parse_class_vars_end(rest)
+    {["        <symbol> , </symbol>",
+      "        <identifier> #{var_name} </identifier>"]
+     ++ var, rest1}
+  end
+
+  def parse_class_vars_end([{:symbol, ";"} | rest]) do
+    {more, rest1} = parse_class_vars(rest)
+    {["        <symbol> ; </symbol>",
+      "      </classVarDec>"] ++ more, rest1}
+  end
+  
+  def parse_subroutines([{:keyword, cfm},
              {keyword_or_identifier, vort},
              {:identifier, subroutine_name}
              | rest])
   when cfm in ["constructor", "function", "method"] do
     {parameter_list, rest1} = parse_parameter_list(rest)
     {subroutine_body, rest2} = parse_subroutine_body(rest1)
+    {more, rest3} = parse_subroutines(rest2)
     {["  <subroutineDec>",
       "    <keyword> #{cfm} </keyword>",
       "    <#{keyword_or_identifier}> #{vort} </#{keyword_or_identifier}>",
@@ -35,14 +74,10 @@ defmodule Parser do
      ++
      subroutine_body
      ++
-     ["  </subroutineDec>"], rest2}
+     ["  </subroutineDec>"] ++ more, rest3}
   end
 
-  def parse([{_, x} | rest]) do
-    {["<other> #{x} <other>"], rest}
-  end
-
-  def parse([]), do: {[], []}
+  def parse_subroutines([{:symbol, "}"} | rest]), do: {[], rest}
 
   def parse_parameter_list([{:symbol, "("} | rest]) do
     {params, rest1} = parse_parameters(rest)
@@ -97,6 +132,8 @@ defmodule Parser do
       "        <identifier> #{var_name} </identifier>"]
      ++ var, rest1}
   end
+
+  def parse_var_dec(all), do: {[], all}
   
   def parse_var_dec_end([{:symbol, ","},
                          {:identifier, var_name}
@@ -144,23 +181,45 @@ defmodule Parser do
       "        </letStatement>"] ++ statement, rest1}
   end
 
-  def parse_statement([{:keyword, "if"} | rest]) do
-    []
+  def parse_statement([{:keyword, "if"},
+                       {:symbol, "("} | rest]) do
+    {exp, rest1} = parse_expression(rest)
+    [{:symbol, ")"},
+     {:symbol, "{"}| rest2] = rest1
+    {statements, rest3} = parse_statements(rest2)
+    {else_statements, rest4} = parse_else_statements(rest3)
+    {more, rest5} = parse_statement(rest4)
+    {["        <ifStatement>",
+      "          <keyword> if </keyword>",
+      "          <symbol> ( </symbol>"]
+     ++ exp
+     ++
+     ["          <symbol> ) </symbol>",
+      "          <symbol> { </symbol>"]
+     ++ statements
+     ++
+     ["          <symbol> } </symbol>"]
+     ++ else_statements
+     ++
+     [
+      "        </ifStatement>"] ++ more, rest5}
   end
-
+  
   def parse_statement([{:keyword, "while"} | rest]) do
     []
   end
 
   def parse_statement([{:keyword, "do"} | rest]) do
     {subroutine_call, rest1} = parse_subroutine_call(rest)
-    {statement, rest2} = parse_statement(rest1)
+    [{:symbol, ";"} | rest2] = rest1;
+    {statement, rest3} = parse_statement(rest2)
     {["        <doStatement>",
       "          <keyword> do </keyword>"]
      ++
      subroutine_call
      ++
-     ["        </doStatement>"] ++ statement, rest2}
+     ["          <symbol> ; </symbol>",
+      "        </doStatement>"] ++ statement, rest3}
   end
 
   def parse_statement([{:keyword, "return"},
@@ -175,21 +234,34 @@ defmodule Parser do
 
   def parse_statement([{:keyword, "return"}
                        | rest]) do
-    {exp, rest1} = parse_expression(rest)
-    {statement, rest2} = parse_statement(rest1)
+    {expression, rest1} = parse_expression(rest)
+    [{:symbol, ";"} | rest2] = rest1
+    {statement, rest3} = parse_statement(rest2)
     {["        <returnStatement>",
-      "          <keyword> return </keyword>",
-      "          <symbol> ; </symbol>",
-      "        </returnStatement>"] ++ statement, rest2}
+      "          <keyword> return </keyword>"]
+     ++
+     expression
+     ++
+     ["          <symbol> ; </symbol>",
+      "        </returnStatement>"]
+     ++ statement, rest3}
   end
 
   def parse_expression([{:identifier, x} | rest]) do
+    {more, rest1} = parse_expression(rest)
     {["          <expression>",
       "            <term>",
       "              <identifier> #{x} </identifier>",
       "            </term>",
-      "          </expression>"], rest}
+      "          </expression>"] ++ more, rest1}
   end
+
+  def parse_expression([{:symbol, ","} | rest]) do
+    {exp, rest1} = parse_expression(rest)
+    {["          <symbol> , </symbol>"] ++ exp, rest1}
+  end
+
+  def parse_expression(all), do: {[], all}
   
   def parse_subroutine_call([{:identifier, subroutine_name},
                              {:symbol, "("}
@@ -200,8 +272,7 @@ defmodule Parser do
      ++
      exp_list
      ++
-     ["          <symbol> ) </symbol>",
-      "          <symbol> ; </symbol>"], rest1}
+     ["          <symbol> ) </symbol>"], rest1}
   end
 
   def parse_subroutine_call([{:identifier, class_or_var_name},
@@ -217,14 +288,35 @@ defmodule Parser do
      ++
      exp_list
      ++
-     ["          <symbol> ) </symbol>",
-      "          <symbol> ; </symbol>"], rest1}
+     ["          <symbol> ) </symbol>"], rest1}
   end
 
-  def parse_expression_list([{:symbol, ")"},
-                             {:symbol, ";"} | rest]) do
+  def parse_expression_list([{:symbol, ")"} | rest]) do
     {["          <expressionList>",
       "          </expressionList>"], rest}
   end
 
+  def parse_expression_list(all) do
+    {exp, rest} = parse_expression(all)
+    [{:symbol, ")"} | rest1] = rest
+    {["          <expressionList>"]
+     ++
+     exp
+     ++
+     ["          </expressionList>"], rest1}
+  end
+
+  def parse_else_statements([{:keyword, "else"},
+                             {:symbol, "{"} | rest]) do
+    {statements, rest1} = parse_statements(rest)
+    [{:symbol, "}"} | rest2] = rest1
+    {["          <keyword> else </keyword>",
+      "          <symbol> { </symbol>"]
+     ++ statements
+     ++
+     ["          <symbol> } </symbol>"], rest2}
+  end
+
+  def parse_else_statements(all), do: {[], all}
+  
 end
