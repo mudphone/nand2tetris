@@ -193,7 +193,36 @@ defmodule Parser do
       "        </letStatement>"]
      ++ statement, rest3}
   end
-  
+
+  def parse_statement([{:keyword, "let"},
+                       {:identifier, var_lhs},
+                       {:symbol, "["}
+                       | rest]) do
+    {index_exp, rest1} = parse_e(rest)
+    [{:symbol, "]"},
+     {:symbol, "="} | rest2] = rest1
+    {rh_exp, rest3} = parse_e(rest2)
+    [{:symbol, ";"} | rest4] = rest3
+    {statement, rest5} = parse_statement(rest4)
+    {["        <letStatement>",
+      "          <keyword> let </keyword>",
+      "          <identifier> #{var_lhs} </identifier>",
+      "          <symbol> [ </symbol>",
+      "          <expression>"]
+     ++ index_exp
+     ++
+     ["          </expression>",
+      "          <symbol> ] </symbol>",
+      "          <symbol> = </symbol>",
+      "          <expression>"]
+     ++ rh_exp
+     ++
+     ["          </expression>",
+      "          <symbol> ; </symbol>",
+      "        </letStatement>"]
+     ++ statement, rest5}
+  end
+
   def parse_statement([{:keyword, "if"},
                        {:symbol, "("} | rest]) do
     {exp, rest1} = parse_e(rest)
@@ -324,6 +353,12 @@ defmodule Parser do
       "</term>"], rest}
   end
 
+  def parse_expression([{:stringConstant, s} | rest]) do
+    {["<term>",
+      "<stringConstant> #{s} </stringConstant>",
+      "</term>"], rest}
+  end
+
   def parse_expression([{:symbol, u} | rest])
   when u in @expression_unary_operators do
     {exp, rest1} = parse_expression(rest)
@@ -386,7 +421,8 @@ defmodule Parser do
       "              <keyword> #{keyword_const} </keyword>",
       "            </term>"], [op_token | rest]}    
   end
-    
+
+  # subroutine 1 of 2 (where's #2?)
   def parse_expression([{:identifier, class_or_var_name},
                         {:symbol, "."},
                         {:identifier, subroutine_name},
@@ -402,6 +438,23 @@ defmodule Parser do
      ++
      ["          <symbol> ) </symbol>",
       "        </term>"], rest1}
+  end
+
+  def parse_expression([{:identifier, var_name},
+                        {:symbol, "["}
+                        | rest]) do
+    {exp, rest1} = parse_e(rest)
+    [{:symbol, "]"} | rest2] = rest1
+    {["<term>",
+      "<identifier> #{var_name} </identifier>",
+      "<symbol> [ </symbol>",
+      "<expression>"]
+     
+     ++ exp
+     ++
+     ["</expression>",
+      "<symbol> ] </symbol>",
+      "</term>"], rest2}
   end
   
   def parse_expression([{:symbol, s} | _]=all)
