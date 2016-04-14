@@ -442,11 +442,22 @@ defmodule Parser do
 
   def parse_else_statements(all), do: {[], all}
 
-  def tree_to_xml([{k, vs} | rest]) when is_list(vs) do
-    ["<#{k}>"] ++ tree_to_xml(vs) ++ ["</#{k}>"] ++ tree_to_xml(rest)
+  def margin(level), do: String.duplicate("  ", level)
+  
+  def tree_to_xml([{k, vs} | rest], {:indent_level, i}) when is_list(vs) do
+    m = margin(i)
+    ["#{m}<#{k}>"]
+    ++ tree_to_xml(vs, {:indent_level, i+1})
+    ++
+    ["#{m}</#{k}>"]
+    ++ tree_to_xml(rest, {:indent_level, i})
   end
-  def tree_to_xml([]), do: []
-  def tree_to_xml([{k, v} | rest]) do
-    ["<#{k}> #{v} </#{k}>"] ++ tree_to_xml(rest)
+  def tree_to_xml([], _), do: []
+  def tree_to_xml([{k, v} | rest], {:indent_level, i}) do
+    m = margin(i)
+    ["#{m}<#{k}> #{v} </#{k}>"]
+    ++ tree_to_xml(rest, {:indent_level, i})
   end
+
+  def to_xml(tree), do: tree_to_xml(tree, {:indent_level, 0})
 end

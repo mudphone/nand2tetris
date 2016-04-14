@@ -28,7 +28,7 @@ defmodule SyntaxAnalyzer do
 
   def parse_to_xml(path) do
     {parsed, _} = parse(path)
-    x = Parser.tree_to_xml(parsed)
+    x = Parser.to_xml(parsed)
     |> Enum.join("\n")
     
     basename = jackfile_basename_no_prefix(path)
