@@ -444,20 +444,20 @@ defmodule Parser do
 
   def margin(level), do: String.duplicate("  ", level)
   
-  def tree_to_xml([{k, vs} | rest], {:indent_level, i}) when is_list(vs) do
+  def tree_to_xml([{k, vs} | rest], indent_level: i) when is_list(vs) do
     m = margin(i)
     ["#{m}<#{k}>"]
-    ++ tree_to_xml(vs, {:indent_level, i+1})
+    ++ tree_to_xml(vs, indent_level: i+1)
     ++
     ["#{m}</#{k}>"]
-    ++ tree_to_xml(rest, {:indent_level, i})
+    ++ tree_to_xml(rest, indent_level: i)
   end
   def tree_to_xml([], _), do: []
-  def tree_to_xml([{k, v} | rest], {:indent_level, i}) do
+  def tree_to_xml([{k, v} | rest], indent_level: i) do
     m = margin(i)
     ["#{m}<#{k}> #{v} </#{k}>"]
-    ++ tree_to_xml(rest, {:indent_level, i})
+    ++ tree_to_xml(rest, indent_level: i)
   end
 
-  def to_xml(tree), do: tree_to_xml(tree, {:indent_level, 0})
+  def to_xml(tree), do: tree_to_xml(tree, indent_level: 0)
 end
