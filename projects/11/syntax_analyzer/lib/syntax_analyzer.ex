@@ -22,13 +22,14 @@ defmodule SyntaxAnalyzer do
   end
 
   def parse(path) do
-    tokenize(path)
-    |> Parser.parse()
+    {parsed, _, _} = tokenize(path)
+                     |> CompilationEngine.parse()
+    parsed
   end
 
   def parse_to_xml(path) do
-    {parsed, _} = parse(path)
-    x = Parser.to_xml(parsed)
+    x = parse(path)
+    |> CompilationEngine.to_xml()
     |> Enum.join("\n")
     
     basename = jackfile_basename_no_prefix(path)

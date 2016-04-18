@@ -3,6 +3,7 @@ defmodule SymbolTable do
   @class_types [:STATIC, :FIELD]
   @subroutine_types [:ARG, :VAR]
 
+  alias VarInfo
   defmodule VarInfo do
     defstruct name: nil, type: nil, kind: nil, index: 0
   end
@@ -63,6 +64,30 @@ defmodule SymbolTable do
     i = var_count(ct_or_st, kind)
     v = %VarInfo{name: name, type: type, kind: kind, index: i}
     Map.put_new(ct_or_st, name, v)
+  end
+
+  def lookup(t, name) do
+    cond do
+      {:ok, var_info} = Map.fetch(subroutine_table(t), name) ->
+        var_info
+      {:ok, var_info} = Map.fetch(class_table(t), name) ->
+        var_info
+    end
+  end
+
+  def kind_of(t, name) do
+    %VarInfo{name: ^name, type: _, kind: kind, index: _} = lookup(t, name)
+    kind
+  end
+
+  def type_of(t, name) do
+    %VarInfo{name: ^name, type: type, kind: _, index: _} = lookup(t, name)
+    type
+  end
+
+  def index_of(t, name) do
+    %VarInfo{name: ^name, type: _, kind: _, index: index} = lookup(t, name)
+    index
   end
 
 end
