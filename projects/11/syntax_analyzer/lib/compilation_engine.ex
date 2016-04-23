@@ -12,15 +12,34 @@ defmodule CompilationEngine do
   # if one of these 4, then...
   #   kind: var argument static field
   #   index
-  def attr_info(category, presently)
-  when category in [:class, :subroutine] do
+  def attr_info(category, presently) do
     %{category: category, presently: presently}
   end
 
-  def attr_info(t, name, presently) do
-    category = SymbolTable.kind_of(t, name)
+  def attr_info(t, name, :unknown, presently) do
+    if SymbolTable.has_key?(t, name) do
+      attr_info(t, name, SymbolTable.kind_of(t, name), presently)
+    else
+      %{category: :unknown, presently: presently}
+    end
+  end
+  
+  def attr_info(t, name, category, presently)
+  when category in [:arg, :var] do
+    kind = SymbolTable.kind_of(t, name)
     index = SymbolTable.index_of(t, name)
-    %{category: category, presently: presently, kind: category, index: index}
+    attr_info_format(category, presently, kind, index)
+  end
+
+  def attr_info(t, name, category, :defined)
+  when category in [:static, :field] do
+    kind = SymbolTable.kind_of(t, name)
+    index = SymbolTable.index_of(t, name)
+    attr_info_format(category, :defined, kind, index)
+  end
+
+  def attr_info_format(category, presently, kind, index) do
+    %{category: category, presently: presently, kind: kind, index: index}
   end
 
   def void_or_type(v_or_t, name) do
@@ -61,14 +80,14 @@ defmodule CompilationEngine do
                         {:identifier, var_name}
                         | rest], t)
   when static_or_field in ["static", "field"] do
-    {more, rest1, t1} = parse_class_vars_end(rest, t)
-    {next, rest2, t2} = parse_class_vars(rest1, t1)
-
-    t3 = SymbolTable.define(t2, var_name, type, string2atom(static_or_field))
+    s_or_f = string2atom(static_or_field)
+    t1 = SymbolTable.define(t, var_name, type, s_or_f)
+    {more, rest1, t2} = parse_class_vars_end(rest, t1)
+    {next, rest2, t3} = parse_class_vars(rest1, t2)
     {[{:classVarDec,
        [{:keyword, static_or_field},
         void_or_type(keyword_or_identifier, type),
-        {:identifier, var_name, :attr, attr_info(t3, var_name, :defined)}]
+        {:identifier, var_name, :attr, attr_info(t, var_name, s_or_f, :defined)}]
        ++ more}] ++ next, rest2, t3}
   end
 
@@ -92,15 +111,16 @@ defmodule CompilationEngine do
              {:identifier, subroutine_name}
              | rest], t)
   when cfm in ["constructor", "function", "method"] do
-    {parameter_list, rest1, t1} = parse_parameter_list(rest, t)
-    {subroutine_body, rest2, t2} = parse_subroutine_body(rest1, t1)
-    {more, rest3, t3} = parse_subroutines(rest2, t2)
+    t1 = SymbolTable.start_subroutine(t)
+    {parameter_list, rest1, t2} = parse_parameter_list(rest, t1)
+    {subroutine_body, rest2, t3} = parse_subroutine_body(rest1, t2)
+    {more, rest3, t4} = parse_subroutines(rest2, t3)
     {[{:subroutineDec,
        [{:keyword, cfm},
         void_or_type(keyword_or_identifier, vort),
         {:identifier, subroutine_name, :attr, attr_info(:subroutine, :defined)}]
        ++ parameter_list
-       ++ subroutine_body}] ++ more, rest3, t3}
+       ++ subroutine_body}] ++ more, rest3, t4}
   end
 
   def parse_subroutines([{:symbol, "}"} | rest], t), do: {[], rest, t}
@@ -122,9 +142,11 @@ defmodule CompilationEngine do
   def parse_parameters([{keyword_or_identifier, type},
                         {:identifier, var_name}
                         | rest], t) do
-    {params, rest1, t1} = parse_parameters(rest, t)
-    {[{keyword_or_identifier, type},
-      {:identifier, var_name}] ++ params, rest1, t1}
+    t1 = SymbolTable.define(t, var_name, type, :arg)
+    {params, rest1, t2} = parse_parameters(rest, t1)
+    {[void_or_type(keyword_or_identifier, type),
+      {:identifier, var_name, :attr, attr_info(t1, var_name, :arg, :defined)}]
+     ++ params, rest1, t2}
   end
 
   def parse_subroutine_body([{:symbol, "{"}
@@ -143,27 +165,29 @@ defmodule CompilationEngine do
                      {keyword_or_identifier, type},
                      {:identifier, var_name}
                      | rest], t) do
-    {more, rest1, t1} = parse_var_dec_end(rest, t)
-    {next, rest2, t2} = parse_var_dec(rest1, t1)
+    t1 = SymbolTable.define(t, var_name, type, :var)
+    {more, rest1, t2} = parse_var_dec_end(rest, type, t1)
+    {next, rest2, t3} = parse_var_dec(rest1, t2)
     {[{:varDec,
        [{:keyword, "var"},
-        {keyword_or_identifier, type},
-        {:identifier, var_name}]
-       ++ more}] ++ next, rest2, t2}
+        void_or_type(keyword_or_identifier, type),
+        {:identifier, var_name, :attr, attr_info(t1, var_name, :var, :defined)}]
+       ++ more}] ++ next, rest2, t3}
   end
 
   def parse_var_dec(all, t), do: {[], all, t}
   
   def parse_var_dec_end([{:symbol, ","},
                          {:identifier, var_name}
-                         | rest], t) do
-    {var, rest1, t1} = parse_var_dec_end(rest, t)
+                         | rest], type, t) do
+    t1 = SymbolTable.define(t, var_name, type, :var)
+    {var, rest1, t2} = parse_var_dec_end(rest, type, t1)
     {[{:symbol, ","},
-      {:identifier, var_name}]
-     ++ var, rest1, t1}
+      {:identifier, var_name, :attr, attr_info(t1, var_name, :var, :defined)}]
+     ++ var, rest1, t2}
   end
 
-  def parse_var_dec_end([{:symbol, ";"} | rest], t) do
+  def parse_var_dec_end([{:symbol, ";"} | rest], _, t) do
     {[{:symbol, ";"}], rest, t}
   end
     
@@ -183,11 +207,11 @@ defmodule CompilationEngine do
     {statement, rest1, t1} = parse_statement(rest, t)
     {[{:letStatement,
        [{:keyword, "let"},
-        {:identifier, var_lhs},
+        {:identifier, var_lhs, :attr, attr_info(t, var_lhs, :unknown, :used)},
         {:symbol, "="},
         {:expression,
          [{:term,
-           [{:identifier, var_rhs}]}]},
+           [{:identifier, var_rhs, :attr, attr_info(t, var_rhs, :unknown, :used)}]}]},
         {:symbol, ";"}]}]
      ++ statement, rest1, t1}
   end
@@ -195,13 +219,13 @@ defmodule CompilationEngine do
   def parse_statement([{:keyword, "let"},
                        {:identifier, var_lhs},
                        {:symbol, "="}
-                      | rest], t) do
+                       | rest], t) do
     {rh_exp, rest1, t1} = parse_e(rest, t)
     [{:symbol, ";"} | rest2] = rest1
     {statement, rest3, t2} = parse_statement(rest2, t1)
     {[{:letStatement,
        [{:keyword, "let"},
-        {:identifier, var_lhs},
+        {:identifier, var_lhs, :attr, attr_info(t, var_lhs, :unknown, :used)},
         {:symbol, "="},
         {:expression, rh_exp},
         {:symbol, ";"}]}]
@@ -220,7 +244,7 @@ defmodule CompilationEngine do
     {statement, rest5, t3} = parse_statement(rest4, t2)
     {[{:letStatement,
        [{:keyword, "let"},
-        {:identifier, var_lhs},
+        {:identifier, var_lhs, :attr, attr_info(:unknown, :used)},
         {:symbol, "["},
         {:expression, index_exp},
         {:symbol, "]"},
@@ -236,7 +260,7 @@ defmodule CompilationEngine do
      {:symbol, "{"}| rest2] = rest1
     {statements, rest3, t2} = parse_statements(rest2, t1)
     {else_statements, rest4, t3} = parse_else_statements(rest3, t2)
-    {more, rest5, t4} = parse_statement(rest4, t3)
+    {more, rest5, t4} = parse_else_statements(rest4, t3)
     {[{:ifStatement,
        [{:keyword, "if"},
         {:symbol, "("},
@@ -348,7 +372,7 @@ defmodule CompilationEngine do
   def parse_expression([{:identifier, var_name},
                         {:symbol, s}=s_token | rest], t)
   when s in @expression_closing_symbols do
-    {[{:term, [{:identifier, var_name}]}], [s_token | rest], t}
+    {[{:term, [{:identifier, var_name, :attr, attr_info(t, var_name, :unknown, :used)}]}], [s_token | rest], t}
   end
 
   def parse_expression([{:keyword, k},
@@ -361,7 +385,7 @@ defmodule CompilationEngine do
   # Delimited by comma: var
   def parse_expression([{:identifier, var_name},
                         {:symbol, ","}=s_token | rest], t) do
-    {[{:term, [{:identifier, var_name}]}], [s_token | rest], t}
+    {[{:term, [{:identifier, var_name, :attr, attr_info(t, var_name, :unknown, :used)}]}], [s_token | rest], t}
   end
 
   # Delimited by comma: keyword constant
@@ -375,7 +399,7 @@ defmodule CompilationEngine do
   def parse_expression([{:identifier, var_name},
                         {:symbol, op}=op_token | rest], t)
   when op in @expression_operators do
-    {[{:term, [{:identifier, var_name}]}], [op_token | rest], t}
+    {[{:term, [{:identifier, var_name, :attr, attr_info(t, var_name, :unknown, :used)}]}], [op_token | rest], t}
   end
 
   # LHS (keyword constand) of op
@@ -394,9 +418,9 @@ defmodule CompilationEngine do
                         | rest], t) do
     {exp_list, rest1, t1} = parse_expression_list(rest, t)
     {[{:term,
-       [{:identifier, class_or_var_name},
+       [{:identifier, class_or_var_name, :attr, attr_info(t, class_or_var_name, :unknown, :used)},
         {:symbol, "."},
-        {:identifier, subroutine_name},
+        {:identifier, subroutine_name, :attr, attr_info(:subroutine, :used)},
         {:symbol, "("}]
        ++ exp_list
        ++
@@ -409,7 +433,7 @@ defmodule CompilationEngine do
     {exp, rest1, t1} = parse_e(rest, t)
     [{:symbol, "]"} | rest2] = rest1
     {[{:term,
-       [{:identifier, var_name},
+       [{:identifier, var_name, :attr, attr_info(t, var_name, :unknown, :used)},
         {:symbol, "["},
         {:expression, exp},
         {:symbol, "]"}]}], rest2, t1}
@@ -429,7 +453,7 @@ defmodule CompilationEngine do
                              {:symbol, "("}
                              | rest], t) do
     {exp_list, rest1, t1} = parse_expression_list(rest, t)
-    {[{:identifier, subroutine_name},
+    {[{:identifier, subroutine_name, :attr, attr_info(:subroutine, :used)},
       {:symbol, "("}]
      ++ exp_list
      ++
@@ -441,14 +465,8 @@ defmodule CompilationEngine do
                              {:identifier, subroutine_name},
                              {:symbol, "("}
                              | rest], t) do
-    attr = case SymbolTable.has_key?(t, class_or_var_name) do
-      true ->
-        attr_info(t, class_or_var_name, :used)
-      _ ->
-        attr_info(:class, :used)
-    end
     {exp_list, rest1, t1} = parse_expression_list(rest, t)
-    {[{:identifier, class_or_var_name, :attr, attr},
+    {[{:identifier, class_or_var_name, :attr, attr_info(:unknown, :used)},
       {:symbol, "."},
       {:identifier, subroutine_name, :attr, attr_info(:subroutine, :used)},
       {:symbol, "("}]
@@ -482,36 +500,51 @@ defmodule CompilationEngine do
 
   def margin(level), do: String.duplicate("  ", level)
 
-  def attr_str(%{category: category, presently: presently}) do
-    " category=\"#{category}\" presently=\"#{presently}\""
-  end
-
-  def attr_str(%{category: category, presently: presently, kind: kind, index: index}) do
+  def attr_str(_name, %{category: category, presently: presently, kind: kind, index: index}, _t) do
     " category=\"#{category}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
   end
 
-  def tree_to_xml([{:identifier, _name, :attr, nil} | _rest]=tree, indent_level: i) do
-    tree_to_xml(tree, indent_level: i)
-  end
-  def tree_to_xml([{:identifier, name, :attr, attr} | rest], indent_level: i) do
-    m = margin(i)
-    ["#{m}<identifier#{attr_str(attr)}> #{name} </identifier>"]
-    ++ tree_to_xml(rest, indent_level: i)
-  end
-  def tree_to_xml([{k, vs} | rest], indent_level: i) when is_list(vs) do
-    m = margin(i)
-    ["#{m}<#{k}>"]
-    ++ tree_to_xml(vs, indent_level: i+1)
-    ++
-    ["#{m}</#{k}>"]
-    ++ tree_to_xml(rest, indent_level: i)
-  end
-  def tree_to_xml([], _), do: []
-  def tree_to_xml([{k, v} | rest], indent_level: i) do
-    m = margin(i)
-    ["#{m}<#{k}> #{v} </#{k}>"]
-    ++ tree_to_xml(rest, indent_level: i)
+  def attr_str(name, %{category: :unknown, presently: presently}, t) do
+    if SymbolTable.has_key?(t, name) do
+      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
+      " category=\"#{kind}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
+    else
+      " category=\"class\" presently=\"#{presently}\""
+    end
   end
 
-  def to_xml(tree), do: tree_to_xml(tree, indent_level: 0)  
+  def attr_str(name, %{category: category, presently: presently}, t) do
+    if SymbolTable.has_key?(t, name) do
+      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
+      " category=\"#{category}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
+    else
+      " category=\"#{category}\" presently=\"#{presently}\""
+    end
+    
+  end
+  
+  def tree_to_xml([{:identifier, _name, :attr, nil} | _rest]=tree, t, indent_level: i) do
+    tree_to_xml(tree, t,  indent_level: i)
+  end
+  def tree_to_xml([{:identifier, name, :attr, attr} | rest], t, indent_level: i) do
+    m = margin(i)
+    ["#{m}<identifier#{attr_str(name, attr, t)}> #{name} </identifier>"]
+    ++ tree_to_xml(rest, t, indent_level: i)
+  end
+  def tree_to_xml([{k, vs} | rest], t, indent_level: i) when is_list(vs) do
+    m = margin(i)
+    ["#{m}<#{k}>"]
+    ++ tree_to_xml(vs, t, indent_level: i+1)
+    ++
+    ["#{m}</#{k}>"]
+    ++ tree_to_xml(rest, t, indent_level: i)
+  end
+  def tree_to_xml([], _, _), do: []
+  def tree_to_xml([{k, v} | rest], t, indent_level: i) do
+    m = margin(i)
+    ["#{m}<#{k}> #{v} </#{k}>"]
+    ++ tree_to_xml(rest, t, indent_level: i)
+  end
+
+  def to_xml(tree, t), do: tree_to_xml(tree, t, indent_level: 0)  
 end
