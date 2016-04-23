@@ -20,7 +20,7 @@ defmodule CompilationEngine do
     if SymbolTable.has_key?(t, name) do
       attr_info(t, name, SymbolTable.kind_of(t, name), presently)
     else
-      %{category: :unknown, presently: presently}
+      attr_info(:unknown, presently)
     end
   end
   
@@ -31,11 +31,14 @@ defmodule CompilationEngine do
     attr_info_format(category, presently, kind, index)
   end
 
-  def attr_info(t, name, category, :defined)
+  def attr_info(t, name, category, presently)
   when category in [:static, :field] do
-    kind = SymbolTable.kind_of(t, name)
-    index = SymbolTable.index_of(t, name)
-    attr_info_format(category, :defined, kind, index)
+    if SymbolTable.has_key?(t, name) do
+      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
+      attr_info_format(category, presently, kind, index)
+    else
+      attr_info(:unknown, presently)
+    end
   end
 
   def attr_info_format(category, presently, kind, index) do
@@ -82,12 +85,12 @@ defmodule CompilationEngine do
   when static_or_field in ["static", "field"] do
     s_or_f = string2atom(static_or_field)
     t1 = SymbolTable.define(t, var_name, type, s_or_f)
-    {more, rest1, t2} = parse_class_vars_end(rest, t1)
+    {more, rest1, t2} = parse_class_vars_end(rest, type, s_or_f, t1)
     {next, rest2, t3} = parse_class_vars(rest1, t2)
     {[{:classVarDec,
        [{:keyword, static_or_field},
         void_or_type(keyword_or_identifier, type),
-        {:identifier, var_name, :attr, attr_info(t, var_name, s_or_f, :defined)}]
+        {:identifier, var_name, :attr, attr_info(t1, var_name, s_or_f, :defined)}]
        ++ more}] ++ next, rest2, t3}
   end
 
@@ -95,14 +98,15 @@ defmodule CompilationEngine do
 
   def parse_class_vars_end([{:symbol, ","},
                             {:identifier, var_name}
-                            | rest], t) do
-    {var, rest1, t1} = parse_class_vars_end(rest, t)
+                            | rest], type, static_or_field, t) do
+    t1 = SymbolTable.define(t, var_name, type, static_or_field)
+    {var, rest1, t2} = parse_class_vars_end(rest, type, static_or_field, t1)
     {[{:symbol, ","},
-      {:identifier, var_name}]
-     ++ var, rest1, t1}
+      {:identifier, var_name, :attr, attr_info(t1, var_name, static_or_field, :defined)}]
+     ++ var, rest1, t2}
   end
 
-  def parse_class_vars_end([{:symbol, ";"} | rest], t) do
+  def parse_class_vars_end([{:symbol, ";"} | rest], _type, _static_or_field, t) do
     {[{:symbol, ";"}], rest, t}
   end
   
@@ -260,7 +264,7 @@ defmodule CompilationEngine do
      {:symbol, "{"}| rest2] = rest1
     {statements, rest3, t2} = parse_statements(rest2, t1)
     {else_statements, rest4, t3} = parse_else_statements(rest3, t2)
-    {more, rest5, t4} = parse_else_statements(rest4, t3)
+    {more, rest5, t4} = parse_statement(rest4, t3)
     {[{:ifStatement,
        [{:keyword, "if"},
         {:symbol, "("},

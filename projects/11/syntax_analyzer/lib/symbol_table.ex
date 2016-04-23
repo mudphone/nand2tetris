@@ -9,7 +9,7 @@ defmodule SymbolTable do
   end
 
   def has_key?(t, k) do
-    Map.has_key?(subroutine_table(t), k) or Map.has_key?(subroutine_table(t), k)
+    Map.has_key?(subroutine_table(t), k) or Map.has_key?(class_table(t), k)
   end
   
   def create(class_table, subroutine_table) do
@@ -72,10 +72,10 @@ defmodule SymbolTable do
 
   def lookup(t, name) do
     cond do
-      {:ok, var_info} = Map.fetch(subroutine_table(t), name) ->
-        var_info
-      {:ok, var_info} = Map.fetch(class_table(t), name) ->
-        var_info
+      Map.has_key?(subroutine_table(t), name) ->
+        Map.get(subroutine_table(t), name)
+      Map.has_key?(class_table(t), name) ->
+        Map.get(class_table(t), name)
     end
   end
 
