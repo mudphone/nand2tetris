@@ -1,11 +1,15 @@
 defmodule SymbolTable do
   
-  @class_types [:STATIC, :FIELD]
-  @subroutine_types [:ARG, :VAR]
+  @class_types [:static, :field]
+  @subroutine_types [:arg, :var]
 
   alias VarInfo
   defmodule VarInfo do
     defstruct name: nil, type: nil, kind: nil, index: 0
+  end
+
+  def has_key?(t, k) do
+    Map.has_key?(subroutine_table(t), k) or Map.has_key?(subroutine_table(t), k)
   end
   
   def create(class_table, subroutine_table) do

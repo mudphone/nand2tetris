@@ -1,4 +1,5 @@
 defmodule CompilationEngine do
+  alias SymbolTable.VarInfo
   
   @jack_statements ["let", "if", "while", "do", "return"]
   @expression_closing_symbols ["}", "]", ";", ")"]
@@ -6,6 +7,33 @@ defmodule CompilationEngine do
   @expression_operators ["+", "-", "*", "/", "&", "|", "<", ">", "="]
   @expression_unary_operators ["-", "~"]
 
+  # category: var argument static field class subroutine
+  # presently: defined used
+  # if one of these 4, then...
+  #   kind: var argument static field
+  #   index
+  def attr_info(category, presently)
+  when category in [:class, :subroutine] do
+    %{category: category, presently: presently}
+  end
+
+  def attr_info(t, name, presently) do
+    category = SymbolTable.kind_of(t, name)
+    index = SymbolTable.index_of(t, name)
+    %{category: category, presently: presently, kind: category, index: index}
+  end
+
+  def void_or_type(v_or_t, name) do
+    case v_or_t do
+      :keyword ->
+        {:keyword, name}
+      :identifier ->
+        {:identifier, name, :attr, attr_info(:class, :used)}
+    end
+  end
+
+  def string2atom(s), do: List.to_atom(String.to_char_list(s))
+  
   def parse(x),  do: parse(x, SymbolTable.create())
   
   def parse([{:keyword, "class"},
@@ -14,11 +42,9 @@ defmodule CompilationEngine do
              | rest], t) do
     {class_var_decs, rest1, t1} = parse_class_vars(rest, t)
     {subroutines, rest2, t2} = parse_subroutines(rest1, t1)
-    attr = %{category: :class,
-             presently: :defined}
     {[{:class,
        [{:keyword, "class"},
-        {:identifier, class_name, :attr, attr},
+        {:identifier, class_name, :attr, attr_info(:class, :defined)},
         {:symbol, "{"}]
        ++ class_var_decs
        ++ subroutines
@@ -37,11 +63,13 @@ defmodule CompilationEngine do
   when static_or_field in ["static", "field"] do
     {more, rest1, t1} = parse_class_vars_end(rest, t)
     {next, rest2, t2} = parse_class_vars(rest1, t1)
+
+    t3 = SymbolTable.define(t2, var_name, type, string2atom(static_or_field))
     {[{:classVarDec,
        [{:keyword, static_or_field},
-        {keyword_or_identifier, type},
-        {:identifier, var_name}]
-       ++ more}] ++ next, rest2, t2}
+        void_or_type(keyword_or_identifier, type),
+        {:identifier, var_name, :attr, attr_info(t3, var_name, :defined)}]
+       ++ more}] ++ next, rest2, t3}
   end
 
   def parse_class_vars(all, t), do: {[], all, t}
@@ -69,8 +97,8 @@ defmodule CompilationEngine do
     {more, rest3, t3} = parse_subroutines(rest2, t2)
     {[{:subroutineDec,
        [{:keyword, cfm},
-        {keyword_or_identifier, vort},
-        {:identifier, subroutine_name}]
+        void_or_type(keyword_or_identifier, vort),
+        {:identifier, subroutine_name, :attr, attr_info(:subroutine, :defined)}]
        ++ parameter_list
        ++ subroutine_body}] ++ more, rest3, t3}
   end
@@ -413,10 +441,16 @@ defmodule CompilationEngine do
                              {:identifier, subroutine_name},
                              {:symbol, "("}
                              | rest], t) do
+    attr = case SymbolTable.has_key?(t, class_or_var_name) do
+      true ->
+        attr_info(t, class_or_var_name, :used)
+      _ ->
+        attr_info(:class, :used)
+    end
     {exp_list, rest1, t1} = parse_expression_list(rest, t)
-    {[{:identifier, class_or_var_name},
+    {[{:identifier, class_or_var_name, :attr, attr},
       {:symbol, "."},
-      {:identifier, subroutine_name},
+      {:identifier, subroutine_name, :attr, attr_info(:subroutine, :used)},
       {:symbol, "("}]
      ++ exp_list
      ++
@@ -455,7 +489,10 @@ defmodule CompilationEngine do
   def attr_str(%{category: category, presently: presently, kind: kind, index: index}) do
     " category=\"#{category}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
   end
-  
+
+  def tree_to_xml([{:identifier, _name, :attr, nil} | _rest]=tree, indent_level: i) do
+    tree_to_xml(tree, indent_level: i)
+  end
   def tree_to_xml([{:identifier, name, :attr, attr} | rest], indent_level: i) do
     m = margin(i)
     ["#{m}<identifier#{attr_str(attr)}> #{name} </identifier>"]
