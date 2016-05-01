@@ -29,12 +29,13 @@ defmodule CodeGeneration do
 
   def compile_subroutine_dec(class_name,
         [{:keyword, "function"},
-         {:keyword, "void"},
+         {keyword_or_identifier, _return_type},
          {:identifier, fn_name, :attr, _},
          {:symbol, "("},
          {:parameterList, param_list},
          {:symbol, ")"},
-         {:subroutineBody, body_parsed}]) do
+         {:subroutineBody, body_parsed}])
+  when keyword_or_identifier in [:keyword, :identifier] do
     body_vm = compile_subroutine_body(body_parsed)
     ["function #{class_name}.#{fn_name} #{number_of_locals(param_list)}"]
     ++ body_vm
@@ -87,13 +88,20 @@ defmodule CodeGeneration do
     ["return"]
   end
 
+  def compile_return_statement([{:keyword, "return"},
+                                {:expression, exp_parsed},
+                                {:symbol, ";"}]) do
+    compile_exp(exp_parsed)
+    ++ ["return"]
+  end  
+
   def segment_of(:static), do: "static"
   def segment_of(:field),  do: "this"
   def segment_of(:arg),    do: "argument"
   def segment_of(:var),    do: "local"
   
   def compile_let_statement([{:keyword, "let"},
-                             {:identifier, var_name, :attr, %{kind: kind, index: index}},
+                             {:identifier, _var_name, :attr, %{kind: kind, index: index}},
                              {:symbol, "="},
                              {:expression, exp_parsed},
                              {:symbol, ";"}]) do
@@ -221,7 +229,7 @@ defmodule CodeGeneration do
   def compile_term([{:keyword, "true"}]), do: ["push constant -1"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
   
-  def compile_term([{:identifier, var_name, :attr, %{kind: kind, index: index}}]) do
+  def compile_term([{:identifier, _var_name, :attr, %{kind: kind, index: index}}]) do
     ["push #{segment_of(kind)} #{index}"]
   end
   
@@ -261,12 +269,6 @@ defmodule CodeGeneration do
       List.keymember?([tup], :expression, 0)
     end) |> length()
   end
-  
-  # def number_of_parameters(param_list) do
-  #   Enum.filter(param_list, fn (tup) ->
-  #     List.keymember?([tup], :identifier, 0)
-  #   end) |> length()
-  # end
 
   def number_of_locals(subroutine_body) do
     Enum.filter(subroutine_body, fn(tup) ->
