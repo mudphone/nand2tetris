@@ -45,7 +45,7 @@ defmodule CodeGeneration do
     {locals, rest1} = compile_var_dec(rest)
     {statements, rest2} = compile_statements(rest1)
     [{:symbol, "}"}] = rest2
-    locals ++ statements ++ [{:symbol, "}"}]
+    locals ++ statements
   end
 
   def compile_var_dec([{:varDec, _} | rest]), do: compile_var_dec(rest)
