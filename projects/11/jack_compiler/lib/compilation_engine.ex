@@ -332,7 +332,7 @@ defmodule CompilationEngine do
     case List.first(rest) do
       {:symbol, op} when op in @expression_operators ->
         {exp1, rest1, t2} = parse_e(Enum.drop(rest, 1), t1)
-        {exp ++ [{:symbol, op_to_xml(op)}] ++ exp1, rest1, t2}
+        {exp ++ [{:symbol, op}] ++ exp1, rest1, t2}
       _ ->
         {exp, rest, t1}
     end
@@ -448,11 +448,6 @@ defmodule CompilationEngine do
     {[], all, t}
   end
 
-  def op_to_xml(">"), do: "&gt;"
-  def op_to_xml("<"), do: "&lt;"
-  def op_to_xml("&"), do: "&amp;"
-  def op_to_xml(x), do: x
-  
   def parse_subroutine_call([{:identifier, subroutine_name},
                              {:symbol, "("}
                              | rest], t) do
@@ -544,11 +539,19 @@ defmodule CompilationEngine do
     ++ tree_to_xml(rest, t, indent_level: i)
   end
   def tree_to_xml([], _, _), do: []
+  def tree_to_xml([{:symbol, op} | rest], t, indent_level: i) do
+    tree_to_xml([{:symbol, op_to_xml(op)} | rest], t, indent_level: i)
+  end
   def tree_to_xml([{k, v} | rest], t, indent_level: i) do
     m = margin(i)
     ["#{m}<#{k}> #{v} </#{k}>"]
     ++ tree_to_xml(rest, t, indent_level: i)
   end
+
+  def op_to_xml(">"), do: "&gt;"
+  def op_to_xml("<"), do: "&lt;"
+  def op_to_xml("&"), do: "&amp;"
+  def op_to_xml(x), do: x
 
   def to_xml(tree, t), do: tree_to_xml(tree, t, indent_level: 0)  
 end

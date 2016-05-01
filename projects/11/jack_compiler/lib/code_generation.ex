@@ -122,7 +122,7 @@ defmodule CodeGeneration do
     label1 = "whileL1$#{JackUuid.generate()}"
     label2 = "whileL2$#{JackUuid.generate()}"
     exp = compile_exp(exp_parsed)
-    {statements, rest1, _t} = compile_statements(rest)
+    {statements, rest1} = compile_statements(rest)
     [{:symbol, "}"}] = rest1
     ["label #{label1}"]
     ++ exp
@@ -147,8 +147,8 @@ defmodule CodeGeneration do
     label1 = "ifL1$#{JackUuid.generate()}"
     label2 = "ifL2$#{JackUuid.generate()}"
     exp = compile_exp(exp_parsed)
-    statements = compile_statements(statements_parsed)
-    else_statements = compile_statements(else_parsed)
+    statements = compile_statement(statements_parsed)
+    else_statements = compile_statement(else_parsed)
     exp
     ++ ["not",
         "if-goto #{label1}"]
@@ -171,11 +171,6 @@ defmodule CodeGeneration do
     compile_term(term) ++ compile_exp(more)
   end
 
-  def compile_exp([{:symbol, "*"},
-                   {:term, term} | more]) do
-    compile_term(term) ++ ["call Math.multiply 2"] ++ compile_exp(more)
-  end
-
   def compile_exp([{:symbol, "+"},
                    {:term, term} | more]) do
     compile_term(term) ++ ["add"] ++ compile_exp(more)
@@ -184,6 +179,41 @@ defmodule CodeGeneration do
   def compile_exp([{:symbol, "-"},
                    {:term, term} | more]) do
     compile_term(term) ++ ["sub"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "*"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["call Math.multiply 2"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "/"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["call Math.divide 2"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "&"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["and"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "|"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["or"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "<"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["lt"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, ">"},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["gt"] ++ compile_exp(more)
+  end
+
+  def compile_exp([{:symbol, "="},
+                   {:term, term} | more]) do
+    compile_term(term) ++ ["eq"] ++ compile_exp(more)
   end
 
   def compile_exp([]), do: []
@@ -195,9 +225,12 @@ defmodule CodeGeneration do
     ["push #{segment_of(kind)} #{index}"]
   end
   
-  def compile_term([{:symbol, "-"},
-                    {:term, term}]) do
-    compile_term(term) ++ ["call Math.multiply -1"]
+  def compile_term([{:symbol, "-"},{:term, term}]) do
+    compile_term(term) ++ ["neg"]
+  end
+
+  def compile_term([{:symbol, "~"},{:term, term}]) do
+    compile_term(term) ++ ["not"]
   end
   
   def compile_term([{:integerConstant, i}]) do
