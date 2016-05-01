@@ -492,12 +492,12 @@ defmodule CompilationEngine do
   def parse_else_statements([{:keyword, "else"},
                              {:symbol, "{"} | rest], t) do
     {statements, rest1, t1} = parse_statements(rest, t)
-    [{:symbol, "}"} | rest2] = rest1
+    # [{:symbol, "}"} | rest2] = rest1
     {[{:keyword, "else"},
       {:symbol, "{"}]
      ++ statements
      ++
-    [{:symbol, "}"}], rest2, t1}
+    [{:symbol, "}"}], rest1, t1}
   end
 
   def parse_else_statements(all, t), do: {[], all, t}
