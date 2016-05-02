@@ -226,7 +226,7 @@ defmodule CodeGeneration do
 
   def compile_exp([]), do: []
 
-  def compile_term([{:keyword, "true"}]), do: ["push constant -1"]
+  def compile_term([{:keyword, "true"}]), do: ["push constant 1", "neg"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
   
   def compile_term([{:identifier, _var_name, :attr, %{kind: kind, index: index}}]) do
