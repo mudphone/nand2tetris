@@ -32,12 +32,12 @@ defmodule CodeGeneration do
          {keyword_or_identifier, _return_type},
          {:identifier, fn_name, :attr, _},
          {:symbol, "("},
-         {:parameterList, param_list},
+         {:parameterList, _param_list},
          {:symbol, ")"},
          {:subroutineBody, body_parsed}])
   when keyword_or_identifier in [:keyword, :identifier] do
     body_vm = compile_subroutine_body(body_parsed)
-    ["function #{class_name}.#{fn_name} #{number_of_locals(param_list)}"]
+    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
     ++ body_vm
   end
 
