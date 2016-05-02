@@ -23,9 +23,7 @@ defmodule CodeGeneration do
     ++ compile_class(class_name, rest)
   end
 
-  def compile_class(_class_name, [{:symbol, "}"}]) do
-    []
-  end
+  def compile_class(_class_name, [{:symbol, "}"}]), do: []
 
   def compile_subroutine_dec(class_name,
         [{:keyword, "function"},
