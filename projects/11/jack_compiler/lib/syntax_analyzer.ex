@@ -22,9 +22,8 @@ defmodule SyntaxAnalyzer do
   end
 
   def parse(path) do
-    {parsed, _, symbol_t} = tokenize(path)
-                            |> CompilationEngine.parse()
-    {parsed, symbol_t}
+    tokenize(path)
+    |> CompilationEngine.parse()
   end
 
   def parse_to_xml(path) do

@@ -7,6 +7,7 @@ defmodule CompilationEngine do
   @expression_operators ["+", "-", "*", "/", "&", "|", "<", ">", "="]
   @expression_unary_operators ["-", "~"]
 
+  # Format attr info, first pass--
   # category: var argument static field class subroutine
   # presently: defined used
   # if one of these 4, then...
@@ -55,8 +56,55 @@ defmodule CompilationEngine do
   end
 
   def string2atom(s), do: List.to_atom(String.to_char_list(s))
+
+  # Format attr info, second pass--
+  def update_attr([{x, inner} | rest], symbol_table)
+    when is_list(inner) do
+    [{x, update_attr(inner, symbol_table)} | update_attr(rest, symbol_table)]
+  end
+
+  def update_attr([{:identifier, _id,
+                    :attr, %{category: _category,
+                             presently: _presently,
+                             kind: _kind,
+                             index: _index}}=tup | rest], symbol_table) do
+    [tup | update_attr(rest, symbol_table)]
+  end
   
-  def parse(x),  do: parse(x, SymbolTable.create())
+  def update_attr([{:identifier, id,
+                    :attr, %{category: :unknown,
+                             presently: presently}} | rest], symbol_table) do
+    attr = if SymbolTable.has_key?(symbol_table, id) do
+      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
+      %{category: kind, presently: presently, kind: kind, index: index}
+    else
+      %{category: :class, presently: presently}
+    end
+    [{:identifier, id, :attr, attr} | update_attr(rest, symbol_table)]
+  end
+
+  def update_attr([{:identifier, id,
+                    :attr, %{category: category,
+                             presently: presently}} | rest], symbol_table) do
+    attr = if SymbolTable.has_key?(symbol_table, id) do
+      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
+      %{category: category, presently: presently, kind: kind, index: index}
+    else
+      %{category: category, presently: presently}
+    end
+    [{:identifier, id, :attr, attr} | update_attr(rest, symbol_table)]
+  end
+
+  def update_attr([tup | rest], symbol_table) do
+    [tup | update_attr(rest, symbol_table)]
+  end
+
+  def update_attr([], _symbol_table), do: []
+  
+  def parse(x) do
+    {parsed, [], symbol_table} = parse(x, SymbolTable.create())
+    update_attr(parsed, symbol_table)
+  end
   
   def parse([{:keyword, "class"},
              {:identifier, class_name},
@@ -499,27 +547,13 @@ defmodule CompilationEngine do
 
   def margin(level), do: String.duplicate("  ", level)
 
+  # Format attr info, XML only--
   def attr_str(_name, %{category: category, presently: presently, kind: kind, index: index}, _t) do
     " category=\"#{category}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
   end
 
-  def attr_str(name, %{category: :unknown, presently: presently}, t) do
-    if SymbolTable.has_key?(t, name) do
-      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
-      " category=\"#{kind}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
-    else
-      " category=\"class\" presently=\"#{presently}\""
-    end
-  end
-
-  def attr_str(name, %{category: category, presently: presently}, t) do
-    if SymbolTable.has_key?(t, name) do
-      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
-      " category=\"#{category}\" presently=\"#{presently}\" kind=\"#{kind}\" index=\"#{index}\""
-    else
-      " category=\"#{category}\" presently=\"#{presently}\""
-    end
-    
+  def attr_str(_name, %{category: category, presently: presently}, _t) do
+    " category=\"#{category}\" presently=\"#{presently}\"\""
   end
   
   def tree_to_xml([{:identifier, _name, :attr, nil} | _rest]=tree, t, indent_level: i) do
