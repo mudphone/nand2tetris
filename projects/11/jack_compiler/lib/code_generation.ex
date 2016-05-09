@@ -14,34 +14,84 @@ defmodule CodeGeneration do
                      {:identifier, class_name, :attr, _},
                      {:symbol, "{"}
                      | rest]) do
-    compile_class(class_name, rest)
+    compile_class(%{class: class_name, fields: 0}, rest)
   end
 
-  def compile_class(class_name,
+  def compile_class(%{class: class_name, fields: field_count},
+        [{:classVarDec, inner} | rest]) do
+    {vm_code, fields} = compile_class_var(inner)
+    vm_code ++ compile_class(%{class: class_name, fields: field_count + fields}, rest)
+  end
+  
+  def compile_class(env,
         [{:subroutineDec, inner} | rest]) do
-    compile_subroutine_dec(class_name, inner)
-    ++ compile_class(class_name, rest)
+    compile_subroutine_dec(env, inner)
+    ++ compile_class(env, rest)
   end
 
-  def compile_class(_class_name, [{:symbol, "}"}]), do: []
+  def compile_class(_env, [{:symbol, "}"}]), do: []
 
-  def compile_subroutine_dec(class_name,
+  def compile_class_var([{:keyword, static_or_field},
+                         {_keyword_or_identifier, _type},
+                         {:identifier, _var_name, :attr, _} | rest]) do
+    {vm_code, n} = compile_class_var(rest)
+    {vm_code, if(static_or_field == :field, do: n+1, else: 0)}
+  end
+
+  def compile_class_var([{:symbol, ","},
+                         {:identifier, _var_name, :attr, _} | rest]) do
+    {vm_code, n} = compile_class_var(rest)
+    {vm_code, n+1}
+  end
+
+  def compile_class_var([{:symbol, ";"}]), do: {[], 0}
+
+  def compile_subroutine_dec(%{class: class_name, fields: field_count},
+        [{:keyword, "constructor"},
+         {:identifier, _class, :attr, _},
+         {:identifier, "new", :attr, _},
+         {:symbol, "("},
+         {:parameterList, _param_list},
+         {:symbol, ")"},
+         {:subroutineBody, body_parsed}]) do
+    body_vm = compile_subroutine_body(class_name, body_parsed)
+    ["function #{class_name}.new #{number_of_locals(body_parsed)}",
+     "Memory.alloc(#{field_count})",
+     "pop pointer 0"]
+    ++ body_vm
+  end
+
+  def compile_subroutine_dec(%{class: class_name},
         [{:keyword, "function"},
-         {keyword_or_identifier, _return_type},
+         {:identifier, _return_type, :attr, _},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:parameterList, _param_list},
+         {:symbol, ")"},
+         {:subroutineBody, body_parsed}]) do
+    body_vm = compile_subroutine_body(class_name, body_parsed)
+    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
+    ++ body_vm
+  end
+
+  def compile_subroutine_dec(%{class: class_name},
+        [{:keyword, function_or_method},
+         {:keyword, return_type},
          {:identifier, fn_name, :attr, _},
          {:symbol, "("},
          {:parameterList, _param_list},
          {:symbol, ")"},
          {:subroutineBody, body_parsed}])
-  when keyword_or_identifier in [:keyword, :identifier] do
-    body_vm = compile_subroutine_body(body_parsed)
+  when function_or_method in ~w(function method) do
+    body_vm = compile_subroutine_body(class_name, body_parsed)
     ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
     ++ body_vm
+    ++ (if(return_type == "void", do: ["push constant 0"], else: []))
   end
 
-  def compile_subroutine_body([{:symbol, "{"} | rest]) do
+  def compile_subroutine_body(class_name, [{:symbol, "{"} | rest]) do
     {locals, rest1} = compile_var_dec(rest)
-    {statements, rest2} = compile_statements(rest1)
+    {statements, rest2} = compile_statements(class_name, rest1)
     [{:symbol, "}"}] = rest2
     locals ++ statements
   end
@@ -50,36 +100,36 @@ defmodule CodeGeneration do
 
   def compile_var_dec(all), do: {[], all}
 
-  def compile_statements([{:statements, statements_parsed} | rest]) do
-    {compile_statement(statements_parsed), rest}
+  def compile_statements(class_name, [{:statements, statements_parsed} | rest]) do
+    {compile_statement(class_name, statements_parsed), rest}
   end
   
-  def compile_statement([{:doStatement, do_parsed} | rest]) do
-    compile_do_statement(do_parsed)
-    ++ compile_statement(rest)
+  def compile_statement(class_name, [{:doStatement, do_parsed} | rest]) do
+    compile_do_statement(class_name, do_parsed)
+    ++ compile_statement(class_name, rest)
   end
 
-  def compile_statement([{:letStatement, let_parsed} | rest]) do
+  def compile_statement(class_name, [{:letStatement, let_parsed} | rest]) do
     compile_let_statement(let_parsed)
-    ++ compile_statement(rest)
+    ++ compile_statement(class_name, rest)
   end
 
-  def compile_statement([{:whileStatement, while_parsed} | rest]) do
-    compile_while_statement(while_parsed)
-    ++ compile_statement(rest)
+  def compile_statement(class_name, [{:whileStatement, while_parsed} | rest]) do
+    compile_while_statement(class_name, while_parsed)
+    ++ compile_statement(class_name, rest)
   end
 
-  def compile_statement([{:ifStatement, if_parsed} | rest]) do
-    compile_if_statement(if_parsed)
-    ++ compile_statement(rest)
+  def compile_statement(class_name, [{:ifStatement, if_parsed} | rest]) do
+    compile_if_statement(class_name, if_parsed)
+    ++ compile_statement(class_name, rest)
   end
 
-  def compile_statement([{:returnStatement, return_parsed} | rest]) do
+  def compile_statement(class_name, [{:returnStatement, return_parsed} | rest]) do
     compile_return_statement(return_parsed)
-    ++ compile_statement(rest)
+    ++ compile_statement(class_name, rest)
   end
 
-  def compile_statement([]), do: []
+  def compile_statement(_class_name, []), do: []
 
   def compile_return_statement([{:keyword, "return"},
                                 {:symbol, ";"}]) do
@@ -108,40 +158,55 @@ defmodule CodeGeneration do
     ++ ["pop #{segment_of(kind)} #{index}"]
   end
 
-  def compile_do_statement([{:keyword, "do"},
-                            {:identifier, class_name, :attr, %{category: :class}},
-                            {:symbol, "."},
-                            {:identifier, fn_name, :attr, _},
-                            {:symbol, "("},
-                            {:expressionList, exp_list_parsed},
-                            {:symbol, ")"},
-                            {:symbol, ";"}]) do
+  def compile_do_statement(_class_name,
+        [{:keyword, "do"},
+         {:identifier, class_name, :attr, %{category: :class}},
+         {:symbol, "."},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:expressionList, exp_list_parsed},
+         {:symbol, ")"},
+         {:symbol, ";"}]) do
     compile_exp_list(exp_list_parsed)
     ++ ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
   end
     
-  def compile_do_statement([{:keyword, "do"},
-                            {:identifier, _var_name, :attr, %{type: type, category: :var, kind: kind, index: index}},
-                            {:symbol, "."},
-                            {:identifier, fn_name, :attr, _},
-                            {:symbol, "("},
-                            {:expressionList, exp_list_parsed},
-                            {:symbol, ")"},
-                            {:symbol, ";"}]) do
-    compile_exp_list(exp_list_parsed)
-    ++ ["push #{segment_of(kind)} #{index}",
-        "call #{type}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
+  def compile_do_statement(_class_name,
+        [{:keyword, "do"},
+         {:identifier, _var_name, :attr, %{type: type, category: :var, kind: kind, index: index}},
+         {:symbol, "."},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:expressionList, exp_list_parsed},
+         {:symbol, ")"},
+         {:symbol, ";"}]) do
+    ["push #{segment_of(kind)} #{index}"]
+    ++ compile_exp_list(exp_list_parsed)
+    ++ ["call #{type}.#{fn_name} #{number_of_expressions(exp_list_parsed) + 1}"]
   end
 
-  def compile_while_statement([{:keyword, "while"},
-                               {:symbol, "("},
-                               {:expression, exp_parsed},
-                               {:symbol, ")"},
-                               {:symbol, "{"} | rest]) do
+  def compile_do_statement(class_name,
+        [{:keyword, "do"},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:expressionList, exp_list_parsed},
+         {:symbol, ")"},
+         {:symbol, ";"}]) do
+    ["push pointer 0"]
+    ++ compile_exp_list(exp_list_parsed)
+    ++ ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed) + 1}"]
+  end
+
+  def compile_while_statement(class_name,
+        [{:keyword, "while"},
+         {:symbol, "("},
+         {:expression, exp_parsed},
+         {:symbol, ")"},
+         {:symbol, "{"} | rest]) do
     label1 = "whileL1$#{JackUuid.generate()}"
     label2 = "whileL2$#{JackUuid.generate()}"
     exp = compile_exp(exp_parsed)
-    {statements, rest1} = compile_statements(rest)
+    {statements, rest1} = compile_statements(class_name, rest)
     [{:symbol, "}"}] = rest1
     ["label #{label1}"]
     ++ exp
@@ -152,22 +217,41 @@ defmodule CodeGeneration do
         "label #{label2}"]
   end
 
-  def compile_if_statement([{:keyword, "if"},
-                            {:symbol, "("},
-                            {:expression, exp_parsed},
-                            {:symbol, ")"},
-                            {:symbol, "{"},
-                            {:statements, statements_parsed},
-                            {:symbol, "}"},
-                            {:keyword, "else"},
-                            {:symbol, "{"},
-                            {:statements, else_parsed},
-                            {:symbol, "}"}]) do
+  def compile_if_statement(class_name,
+        [{:keyword, "if"},
+         {:symbol, "("},
+         {:expression, exp_parsed},
+         {:symbol, ")"},
+         {:symbol, "{"},
+         {:statements, statements_parsed},
+         {:symbol, "}"}]) do
+    label1 = "ifL1$#{JackUuid.generate()}"
+    exp = compile_exp(exp_parsed)
+    statements = compile_statement(class_name, statements_parsed)
+    exp
+    ++ ["not",
+        "if-goto #{label1}"]
+    ++ statements
+    ++ ["label #{label1}"]
+  end
+
+  def compile_if_statement(class_name,
+        [{:keyword, "if"},
+         {:symbol, "("},
+         {:expression, exp_parsed},
+         {:symbol, ")"},
+         {:symbol, "{"},
+         {:statements, statements_parsed},
+         {:symbol, "}"},
+         {:keyword, "else"},
+         {:symbol, "{"},
+         {:statements, else_parsed},
+         {:symbol, "}"}]) do
     label1 = "ifL1$#{JackUuid.generate()}"
     label2 = "ifL2$#{JackUuid.generate()}"
     exp = compile_exp(exp_parsed)
-    statements = compile_statement(statements_parsed)
-    else_statements = compile_statement(else_parsed)
+    statements = compile_statement(class_name, statements_parsed)
+    else_statements = compile_statement(class_name, else_parsed)
     exp
     ++ ["not",
         "if-goto #{label1}"]
@@ -237,6 +321,7 @@ defmodule CodeGeneration do
 
   def compile_exp([]), do: []
 
+  def compile_term([{:keyword, "this"}]), do: ["push argument 0"]
   def compile_term([{:keyword, "true"}]), do: ["push constant 1", "neg"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
   
