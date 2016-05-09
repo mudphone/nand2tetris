@@ -35,7 +35,7 @@ defmodule CodeGeneration do
                          {_keyword_or_identifier, _type},
                          {:identifier, _var_name, :attr, _} | rest]) do
     {vm_code, n} = compile_class_var(rest)
-    {vm_code, if(static_or_field == :field, do: n+1, else: 0)}
+    {vm_code, if(static_or_field == "field", do: n+1, else: 0)}
   end
 
   def compile_class_var([{:symbol, ","},
@@ -56,7 +56,8 @@ defmodule CodeGeneration do
          {:subroutineBody, body_parsed}]) do
     body_vm = compile_subroutine_body(class_name, body_parsed)
     ["function #{class_name}.new #{number_of_locals(body_parsed)}",
-     "Memory.alloc(#{field_count})",
+     "push constant #{field_count}",
+     "call Memory.alloc 1",
      "pop pointer 0"]
     ++ body_vm
   end
