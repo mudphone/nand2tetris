@@ -32,7 +32,14 @@ defmodule CodeGeneration do
   def compile_class(_env, [{:symbol, "}"}]), do: []
 
   def compile_class_var([{:keyword, static_or_field},
-                         {_keyword_or_identifier, _type},
+                         {:keyword, _type},
+                         {:identifier, _var_name, :attr, _} | rest]) do
+    {vm_code, n} = compile_class_var(rest)
+    {vm_code, if(static_or_field == "field", do: n+1, else: 0)}
+  end
+
+  def compile_class_var([{:keyword, static_or_field},
+                         {:identifier, _type, :attr, _},
                          {:identifier, _var_name, :attr, _} | rest]) do
     {vm_code, n} = compile_class_var(rest)
     {vm_code, if(static_or_field == "field", do: n+1, else: 0)}
@@ -174,13 +181,14 @@ defmodule CodeGeneration do
     
   def compile_do_statement(_class_name,
         [{:keyword, "do"},
-         {:identifier, _var_name, :attr, %{type: type, category: :var, kind: kind, index: index}},
+         {:identifier, _var_name, :attr, %{type: type, category: category, kind: kind, index: index}},
          {:symbol, "."},
          {:identifier, fn_name, :attr, _},
          {:symbol, "("},
          {:expressionList, exp_list_parsed},
          {:symbol, ")"},
-         {:symbol, ";"}]) do
+         {:symbol, ";"}])
+  when category in [:field, :var] do
     ["push #{segment_of(kind)} #{index}"]
     ++ compile_exp_list(exp_list_parsed)
     ++ ["call #{type}.#{fn_name} #{number_of_expressions(exp_list_parsed) + 1}"]
