@@ -27,23 +27,22 @@ defmodule CompilationEngine do
   
   def attr_info(t, name, category, presently)
   when category in [:arg, :var] do
-    kind = SymbolTable.kind_of(t, name)
-    index = SymbolTable.index_of(t, name)
-    attr_info_format(category, presently, kind, index)
+    %VarInfo{name: _, type: type, kind: kind, index: index} = SymbolTable.lookup(t, name)
+    attr_info_format(category, presently, kind, index, type)
   end
 
   def attr_info(t, name, category, presently)
   when category in [:static, :field] do
     if SymbolTable.has_key?(t, name) do
-      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(t, name)
-      attr_info_format(category, presently, kind, index)
+      %VarInfo{name: _, type: type, kind: kind, index: index} = SymbolTable.lookup(t, name)
+      attr_info_format(category, presently, kind, index, type)
     else
       attr_info(:unknown, presently)
     end
   end
 
-  def attr_info_format(category, presently, kind, index) do
-    %{category: category, presently: presently, kind: kind, index: index}
+  def attr_info_format(category, presently, kind, index, type) do
+    %{category: category, presently: presently, kind: kind, index: index, type: type}
   end
 
   def void_or_type(v_or_t, name) do
@@ -67,7 +66,8 @@ defmodule CompilationEngine do
                     :attr, %{category: _category,
                              presently: _presently,
                              kind: _kind,
-                             index: _index}}=tup | rest], symbol_table) do
+                             index: _index,
+                             type: _type}}=tup | rest], symbol_table) do
     [tup | update_attr(rest, symbol_table)]
   end
   
@@ -75,8 +75,8 @@ defmodule CompilationEngine do
                     :attr, %{category: :unknown,
                              presently: presently}} | rest], symbol_table) do
     attr = if SymbolTable.has_key?(symbol_table, id) do
-      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
-      %{category: kind, presently: presently, kind: kind, index: index}
+      %VarInfo{name: _, type: type, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
+      %{category: kind, presently: presently, kind: kind, index: index, type: type}
     else
       %{category: :class, presently: presently}
     end
@@ -87,8 +87,8 @@ defmodule CompilationEngine do
                     :attr, %{category: category,
                              presently: presently}} | rest], symbol_table) do
     attr = if SymbolTable.has_key?(symbol_table, id) do
-      %VarInfo{name: _, type: _, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
-      %{category: category, presently: presently, kind: kind, index: index}
+      %VarInfo{name: _, type: type, kind: kind, index: index} = SymbolTable.lookup(symbol_table, id)
+      %{category: category, presently: presently, kind: kind, index: index, type: type}
     else
       %{category: category, presently: presently}
     end

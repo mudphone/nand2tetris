@@ -109,7 +109,7 @@ defmodule CodeGeneration do
   end
 
   def compile_do_statement([{:keyword, "do"},
-                            {:identifier, class_name, :attr, _},
+                            {:identifier, class_name, :attr, %{category: :class}},
                             {:symbol, "."},
                             {:identifier, fn_name, :attr, _},
                             {:symbol, "("},
@@ -118,6 +118,19 @@ defmodule CodeGeneration do
                             {:symbol, ";"}]) do
     compile_exp_list(exp_list_parsed)
     ++ ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
+  end
+    
+  def compile_do_statement([{:keyword, "do"},
+                            {:identifier, _var_name, :attr, %{type: type, category: :var, kind: kind, index: index}},
+                            {:symbol, "."},
+                            {:identifier, fn_name, :attr, _},
+                            {:symbol, "("},
+                            {:expressionList, exp_list_parsed},
+                            {:symbol, ")"},
+                            {:symbol, ";"}]) do
+    compile_exp_list(exp_list_parsed)
+    ++ ["push #{segment_of(kind)} #{index}",
+        "call #{type}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
   end
 
   def compile_while_statement([{:keyword, "while"},
