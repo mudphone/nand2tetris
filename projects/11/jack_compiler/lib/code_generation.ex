@@ -83,18 +83,31 @@ defmodule CodeGeneration do
   end
 
   def compile_subroutine_dec(%{class: class_name},
-        [{:keyword, function_or_method},
-         {:keyword, return_type},
+        [{:keyword, "function"},
+         {:keyword, _return_type},
          {:identifier, fn_name, :attr, _},
          {:symbol, "("},
          {:parameterList, _param_list},
          {:symbol, ")"},
-         {:subroutineBody, body_parsed}])
-  when function_or_method in ~w(function method) do
+         {:subroutineBody, body_parsed}]) do
     body_vm = compile_subroutine_body(class_name, body_parsed)
     ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
     ++ body_vm
-    ++ (if(return_type == "void", do: ["push constant 0"], else: []))
+  end
+
+  def compile_subroutine_dec(%{class: class_name},
+        [{:keyword, "method"},
+         {:keyword, _return_type},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:parameterList, _param_list},
+         {:symbol, ")"},
+         {:subroutineBody, body_parsed}]) do
+    body_vm = compile_subroutine_body(class_name, body_parsed)
+    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}",
+     "push argument 0",
+     "pop pointer 0"]
+    ++ body_vm
   end
 
   def compile_subroutine_body(class_name, [{:symbol, "{"} | rest]) do
@@ -141,7 +154,8 @@ defmodule CodeGeneration do
 
   def compile_return_statement([{:keyword, "return"},
                                 {:symbol, ";"}]) do
-    ["return"]
+    ["push constant 0",
+     "return"]
   end
 
   def compile_return_statement([{:keyword, "return"},
@@ -330,7 +344,7 @@ defmodule CodeGeneration do
 
   def compile_exp([]), do: []
 
-  def compile_term([{:keyword, "this"}]), do: ["push argument 0"]
+  def compile_term([{:keyword, "this"}]), do: ["push pointer 0"]
   def compile_term([{:keyword, "true"}]), do: ["push constant 1", "neg"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
   
