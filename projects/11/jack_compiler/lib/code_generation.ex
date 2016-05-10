@@ -61,38 +61,11 @@ defmodule CodeGeneration do
          {:parameterList, _param_list},
          {:symbol, ")"},
          {:subroutineBody, body_parsed}]) do
-    body_vm = compile_subroutine_body(class_name, body_parsed)
     ["function #{class_name}.new #{number_of_locals(body_parsed)}",
      "push constant #{field_count}",
      "call Memory.alloc 1",
      "pop pointer 0"]
-    ++ body_vm
-  end
-
-  def compile_subroutine_dec(%{class: class_name},
-        [{:keyword, "function"},
-         {:identifier, _return_type, :attr, _},
-         {:identifier, fn_name, :attr, _},
-         {:symbol, "("},
-         {:parameterList, _param_list},
-         {:symbol, ")"},
-         {:subroutineBody, body_parsed}]) do
-    body_vm = compile_subroutine_body(class_name, body_parsed)
-    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
-    ++ body_vm
-  end
-
-  def compile_subroutine_dec(%{class: class_name},
-        [{:keyword, "function"},
-         {:keyword, _return_type},
-         {:identifier, fn_name, :attr, _},
-         {:symbol, "("},
-         {:parameterList, _param_list},
-         {:symbol, ")"},
-         {:subroutineBody, body_parsed}]) do
-    body_vm = compile_subroutine_body(class_name, body_parsed)
-    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
-    ++ body_vm
+    ++ compile_subroutine_body(class_name, body_parsed)
   end
 
   def compile_subroutine_dec(%{class: class_name},
@@ -103,13 +76,39 @@ defmodule CodeGeneration do
          {:parameterList, _param_list},
          {:symbol, ")"},
          {:subroutineBody, body_parsed}]) do
-    body_vm = compile_subroutine_body(class_name, body_parsed)
     ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}",
      "push argument 0",
      "pop pointer 0"]
-    ++ body_vm
+    ++ compile_subroutine_body(class_name, body_parsed)
   end
 
+  def compile_subroutine_dec(%{class: class_name},
+        [{:keyword, "function"},
+         {:identifier, _return_type, :attr, _},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:parameterList, _param_list},
+         {:symbol, ")"},
+         {:subroutineBody, body_parsed}]) do
+    compile_subroutine_dec_for_function(class_name, fn_name, body_parsed)
+  end
+
+  def compile_subroutine_dec(%{class: class_name},
+        [{:keyword, "function"},
+         {:keyword, _return_type},
+         {:identifier, fn_name, :attr, _},
+         {:symbol, "("},
+         {:parameterList, _param_list},
+         {:symbol, ")"},
+         {:subroutineBody, body_parsed}]) do
+    compile_subroutine_dec_for_function(class_name, fn_name, body_parsed)
+  end
+
+  def compile_subroutine_dec_for_function(class_name, fn_name, body_parsed) do
+    ["function #{class_name}.#{fn_name} #{number_of_locals(body_parsed)}"]
+    ++ compile_subroutine_body(class_name, body_parsed)    
+  end
+  
   def compile_subroutine_body(class_name, [{:symbol, "{"} | rest]) do
     {locals, rest1} = compile_var_dec(rest)
     {statements, rest2} = compile_statements(class_name, rest1)
