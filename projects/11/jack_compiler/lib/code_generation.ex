@@ -358,6 +358,12 @@ defmodule CodeGeneration do
   def compile_term([{:symbol, "~"},{:term, term}]) do
     compile_term(term) ++ ["not"]
   end
+
+  def compile_term([{:stringConstant, str}]) when is_bitstring(str) do
+    ["push constant #{String.length(str)}",
+     "call String.new 1"]
+    ++ compile_str(str)
+  end
   
   def compile_term([{:integerConstant, i}]) do
     ["push constant #{i}"]
@@ -381,6 +387,14 @@ defmodule CodeGeneration do
   end
 
   def compile_term([]), do: []
+  
+  def compile_str(<<h>> <> rest) do
+    ["push constant #{h}",
+     "call String.appendChar 2"]
+    ++ compile_str(rest)
+  end
+
+  def compile_str(""), do: []
   
   def number_of_expressions(exp_list) do
     Enum.filter(exp_list, fn (tup) ->
