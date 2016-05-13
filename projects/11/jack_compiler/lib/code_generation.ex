@@ -361,7 +361,8 @@ defmodule CodeGeneration do
   def compile_term([{:keyword, "this"}]), do: ["push pointer 0"]
   def compile_term([{:keyword, "true"}]), do: ["push constant 1", "neg"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
-
+  def compile_term([{:keyword, "null"}]), do: ["push constant 0"]
+  
   def compile_term([{:identifier, _var_name,
                      :attr, %{kind: kind, index: index, type: "Array"}},
                     {:symbol, "["},

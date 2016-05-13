@@ -296,7 +296,7 @@ defmodule CompilationEngine do
     {statement, rest5, t3} = parse_statement(rest4, t2)
     {[{:letStatement,
        [{:keyword, "let"},
-        {:identifier, var_lhs, :attr, attr_info(:unknown, :used)},
+        {:identifier, var_lhs, :attr, attr_info(t, var_lhs, :unknown, :used)},
         {:symbol, "["},
         {:expression, index_exp},
         {:symbol, "]"},
