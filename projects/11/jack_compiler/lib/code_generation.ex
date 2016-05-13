@@ -402,17 +402,29 @@ defmodule CodeGeneration do
     compile_exp(exp_parsed)
   end
 
-  def compile_term([{:identifier, class_name, :attr, _},
+  def compile_term([{:identifier, class_name, :attr, %{category: :class}},
                     {:symbol, "."},
                     {:identifier, fn_name, :attr, %{category: :subroutine}},
                     {:symbol, "("},
                     {:expressionList, exp_list_parsed},
                     {:symbol, ")"}]) do
     compile_exp_list(exp_list_parsed)
-    ++
-    ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
+    ++ ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed)}"]
   end
 
+  def compile_term([{:identifier, _var_name,
+                     :attr, %{type: class_name, kind: kind, index: index}},
+                    {:symbol, "."},
+                    {:identifier, fn_name, :attr, %{category: :subroutine}},
+                    {:symbol, "("},
+                    {:expressionList, exp_list_parsed},
+                    {:symbol, ")"}]) do
+    ["push #{segment_of(kind)} #{index}"]
+    ++ compile_exp_list(exp_list_parsed)
+    ++ ["call #{class_name}.#{fn_name} #{number_of_expressions(exp_list_parsed) + 1}"]
+  end
+
+  
   def compile_term([]), do: []
   
   def compile_str(<<h>> <> rest) do
