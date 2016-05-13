@@ -168,13 +168,28 @@ defmodule CodeGeneration do
   def segment_of(:field),  do: "this"
   def segment_of(:arg),    do: "argument"
   def segment_of(:var),    do: "local"
+
+  def compile_let_statement([{:keyword, "let"},
+                             {:identifier, _var_name, :attr, %{kind: kind, index: index, type: "Array"}},
+                             {:symbol, "["},
+                             {:expression, exp_parsed},
+                             {:symbol, "]"},
+                             {:symbol, "="},
+                             {:expression, rh_exp_parsed},
+                             {:symbol, ";"}]) do
+    compile_exp(exp_parsed)
+    ++ ["push #{segment_of(kind)} #{index}",
+        "add",
+        "pop pointer 1"]
+    ++ compile_exp(rh_exp_parsed)
+    ++ ["pop that 0"]
+  end
   
   def compile_let_statement([{:keyword, "let"},
                              {:identifier, _var_name, :attr, %{kind: kind, index: index}},
                              {:symbol, "="},
                              {:expression, exp_parsed},
-                             {:symbol, ";"}]) do
-    
+                             {:symbol, ";"}]) do 
     compile_exp(exp_parsed)
     ++ ["pop #{segment_of(kind)} #{index}"]
   end
@@ -346,6 +361,18 @@ defmodule CodeGeneration do
   def compile_term([{:keyword, "this"}]), do: ["push pointer 0"]
   def compile_term([{:keyword, "true"}]), do: ["push constant 1", "neg"]
   def compile_term([{:keyword, "false"}]), do: ["push constant 0"]
+
+  def compile_term([{:identifier, _var_name,
+                     :attr, %{kind: kind, index: index, type: "Array"}},
+                    {:symbol, "["},
+                    {:expression, exp_parsed},
+                    {:symbol, "]"}]) do
+    compile_exp(exp_parsed)
+    ++ ["push #{segment_of(kind)} #{index}",
+        "add",
+        "pop pointer 1",
+        "push that 0"]
+  end
   
   def compile_term([{:identifier, _var_name, :attr, %{kind: kind, index: index}}]) do
     ["push #{segment_of(kind)} #{index}"]
