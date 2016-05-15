@@ -172,16 +172,16 @@ defmodule CodeGeneration do
   def compile_let_statement([{:keyword, "let"},
                              {:identifier, _var_name, :attr, %{kind: kind, index: index, type: "Array"}},
                              {:symbol, "["},
-                             {:expression, exp_parsed},
+                             {:expression, idx_exp_parsed},
                              {:symbol, "]"},
                              {:symbol, "="},
                              {:expression, rh_exp_parsed},
                              {:symbol, ";"}]) do
-    compile_exp(exp_parsed)
+    compile_exp(rh_exp_parsed)
+    ++ compile_exp(idx_exp_parsed)
     ++ ["push #{segment_of(kind)} #{index}",
         "add",
         "pop pointer 1"]
-    ++ compile_exp(rh_exp_parsed)
     ++ ["pop that 0"]
   end
   
