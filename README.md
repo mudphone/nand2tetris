@@ -6,6 +6,8 @@ I've used [LFE](http://lfe.io) and [Elixir](http://lfe.io) (and other tools) to 
                 +----------+               +------------+                         +-----------+
 Jack Program ---| Compiler |--> VM Code ---| Translator |--> Assembly Language ---| Assembler |--> Machine Code
                 +----------+               +------------+                         +-----------+
+
+|<-------------see below------------->|                
 ````
 
 ````
