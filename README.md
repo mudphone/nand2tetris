@@ -2,10 +2,13 @@
 I've used [LFE](http://lfe.io) and [Elixir](http://lfe.io) (and other tools) to follow the Nand2Tetris course, which guides "self-learners through the construction of a modern, full-scale computer system - hardware and software - from the ground up. In the process, the students practice many major computer science (CS) abstractions studied in typical CS courses and make them concrete through 12 guided implementation projects."
 
 ## The Parts
+````
                 +----------+               +------------+                         +-----------+
 Jack Program ---| Compiler |--> VM Code ---| Translator |--> Assembly Language ---| Assembler |--> Machine Code
                 +----------+               +------------+                         +-----------+
+````
 
+````
                 +---------------------------------------------------------------------------+
                 | Compiler                                                                  |
                 |                                                                           |
@@ -19,6 +22,7 @@ Jack Program ---|---|-->| Tokenizer |-->| Parser               |---|-->| Code Ge
                 |   +----------------------------------------------+                        |
                 |                                                                           |
                 +---------------------------------------------------------------------------+
+````
 
 * [The assembler in LFE](https://github.com/mudphone/nand2tetris/blob/master/projects/06/assembler.lfe)
 * [The VM code translator in Elixir](https://github.com/mudphone/nand2tetris/blob/master/projects/08/translator.ex)
