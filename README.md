@@ -35,7 +35,8 @@ Jack Program ---|---|-->| Tokenizer |-->| Parser               |---|-->| Code Ge
 * [The syntax analyzer (wraps the tokenizer and parser) in Elixir](https://github.com/mudphone/nand2tetris/blob/master/projects/11/jack_compiler/lib/syntax_analyzer.ex)
 
 ## The Overview Video
-[From Nand to Tetris In 12 Steps](https://www.youtube.com/watch?v=JtXvUoPx4Qs) [~9 minutes]
+* [From Nand to Tetris In 12 Steps](https://www.youtube.com/watch?v=JtXvUoPx4Qs) [~9 minutes]
+* And now it's a TED talk: [Shimon Schocken: The self-organizing computer course](https://www.youtube.com/watch?v=iE7YRHxwoDs)
 
 ## Based on:
 [The Elements of Computing Systems: Building a Modern Computer from First Principles, Nand to Tetris Companion](http://nand2tetris.org/), by Noam Nisan and Shimon Schocken
